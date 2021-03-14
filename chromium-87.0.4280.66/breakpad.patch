@@ -1,0 +1,47 @@
+From 5307571c0a3012bed1cc3f8922f28c2b6071e38d Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:33:40 +0100
+Subject: [PATCH] breakpad: Disable getcontext on ppc64
+
+---
+ third_party/breakpad/BUILD.gn | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/third_party/breakpad/BUILD.gn b/third_party/breakpad/BUILD.gn
+index b5452e16a6..746a646e5e 100644
+--- a/third_party/breakpad/BUILD.gn
++++ b/third_party/breakpad/BUILD.gn
+@@ -611,7 +611,6 @@ if (is_linux || is_chromeos || is_android) {
+       "breakpad/src/client/minidump_file_writer.h",
+       "breakpad/src/common/convert_UTF.cc",
+       "breakpad/src/common/convert_UTF.h",
+-      "breakpad/src/common/linux/breakpad_getcontext.S",
+       "breakpad/src/common/linux/elf_core_dump.cc",
+       "breakpad/src/common/linux/elf_core_dump.h",
+       "breakpad/src/common/linux/elfutils.cc",
+@@ -649,6 +648,14 @@ if (is_linux || is_chromeos || is_android) {
+ 
+     libs = [ "dl" ]
+ 
++    if (current_cpu == "ppc64") {
++      defines = [ "HAVE_GETCONTEXT" ]
++    } else {
++      sources += [
++        "breakpad/src/common/linux/breakpad_getcontext.S"
++      ]
++    }
++
+     include_dirs = [
+       ".",
+       "breakpad/src",
+@@ -699,7 +706,6 @@ if (is_linux || is_chromeos || is_android) {
+       "breakpad/src/client/linux/minidump_writer/minidump_writer_unittest.cc",
+       "breakpad/src/client/linux/minidump_writer/minidump_writer_unittest_utils.cc",
+       "breakpad/src/client/linux/minidump_writer/proc_cpuinfo_reader_unittest.cc",
+-      "breakpad/src/common/linux/breakpad_getcontext_unittest.cc",
+       "breakpad/src/common/linux/elf_core_dump_unittest.cc",
+       "breakpad/src/common/linux/file_id_unittest.cc",
+       "breakpad/src/common/linux/linux_libc_support_unittest.cc",
+-- 
+2.26.2
+

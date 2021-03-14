@@ -1,0 +1,27 @@
+From d4a846bdb742c17e370e5934699a8a4756bf9fa1 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:53:50 +0100
+Subject: [PATCH] Remove #error on big endian
+
+---
+ src/3rdparty/chromium/media/parsers/webp_parser.cc | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/src/3rdparty/chromium/media/parsers/webp_parser.cc b/src/3rdparty/chromium/media/parsers/webp_parser.cc
+index b0348037e..efd8014a5 100644
+--- a/src/3rdparty/chromium/media/parsers/webp_parser.cc
++++ b/src/3rdparty/chromium/media/parsers/webp_parser.cc
+@@ -14,10 +14,6 @@
+ #include "build/build_config.h"
+ #include "media/parsers/vp8_parser.h"
+ 
+-#if !defined(ARCH_CPU_LITTLE_ENDIAN)
+-#error Big-Endian architecture not supported.
+-#endif
+-
+ namespace media {
+ 
+ namespace {
+-- 
+2.26.2
+

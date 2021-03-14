@@ -1,0 +1,27 @@
+From 375be461eb932734ef3ae2c38cbffdda727fb984 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:53:50 +0100
+Subject: [PATCH] Remove #error on big endian
+
+---
+ media/parsers/webp_parser.cc | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/media/parsers/webp_parser.cc b/media/parsers/webp_parser.cc
+index 9d2ba7a12a..f5ad730153 100644
+--- a/media/parsers/webp_parser.cc
++++ b/media/parsers/webp_parser.cc
+@@ -14,10 +14,6 @@
+ #include "build/build_config.h"
+ #include "media/parsers/vp8_parser.h"
+ 
+-#if !defined(ARCH_CPU_LITTLE_ENDIAN)
+-#error Big-Endian architecture not supported.
+-#endif
+-
+ namespace media {
+ 
+ namespace {
+-- 
+2.26.2
+

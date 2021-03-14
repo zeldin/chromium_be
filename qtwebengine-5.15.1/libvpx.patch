@@ -1,0 +1,336 @@
+From 0df301c51a2bd420d4c47544c625fc2b4db93876 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:25:36 +0100
+Subject: [PATCH] Interpret "ppc64" as big endian
+
+---
+ .../chromium/third_party/libvpx/BUILD.gn      | 18 +++++++++++++
+ .../third_party/libvpx/generate_gni.sh        | 25 ++++++++++++++++---
+ .../third_party/libvpx/libvpx_srcs.gni        | 20 +++++++++++++++
+ .../source/config/linux/ppc64/vpx_config.asm  | 12 ++++-----
+ .../source/config/linux/ppc64/vpx_config.c    |  2 +-
+ .../source/config/linux/ppc64/vpx_config.h    | 12 ++++-----
+ .../source/libvpx/build/make/configure.sh     |  7 ++++++
+ .../libvpx/source/libvpx/configure            |  1 +
+ 8 files changed, 81 insertions(+), 16 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/libvpx/BUILD.gn b/src/3rdparty/chromium/third_party/libvpx/BUILD.gn
+index 5a76b2e22..05eba424d 100644
+--- a/src/3rdparty/chromium/third_party/libvpx/BUILD.gn
++++ b/src/3rdparty/chromium/third_party/libvpx/BUILD.gn
+@@ -265,6 +265,19 @@ if (current_cpu == "arm") {
+   }
+ }
+ 
++if (current_cpu == "ppc64" || current_cpu == "ppc64el") {
++  source_set("libvpx_intrinsics_vsx") {
++    configs -= [ "//build/config/compiler:chromium_code" ]
++    configs += [ "//build/config/compiler:no_chromium_code" ]
++    configs += [ ":libvpx_config" ]
++    cflags = [
++      "-maltivec",
++      "-mvsx",
++    ]
++    sources = libvpx_srcs_ppc64_vsx
++  }
++}
++
+ # Converts ARM assembly files to GAS style.
+ if (current_cpu == "arm" && arm_assembly_sources != []) {
+   action_foreach("convert_arm_assembly") {
+@@ -330,6 +343,8 @@ static_library("bundled_libvpx") {
+     }
+   } else if (current_cpu == "mipsel" || current_cpu == "mips64el") {
+     sources = libvpx_srcs_mips
++  } else if (current_cpu == "ppc64" || current_cpu == "ppc64el") {
++    sources = libvpx_srcs_ppc64
+   } else if (current_cpu == "arm") {
+     if (is_chromeos) {
+       sources = libvpx_srcs_arm_neon_highbd
+@@ -375,6 +390,9 @@ static_library("bundled_libvpx") {
+   if (current_cpu == "arm" && arm_assembly_sources != []) {
+     deps += [ ":libvpx_assembly_arm" ]
+   }
++  if (current_cpu == "ppc64" || current_cpu == "ppc64el") {
++    deps += [ ":libvpx_intrinsics_vsx" ]
++  }
+ 
+   public_configs = [ ":libvpx_external_config" ]
+ }
+diff --git a/src/3rdparty/chromium/third_party/libvpx/generate_gni.sh b/src/3rdparty/chromium/third_party/libvpx/generate_gni.sh
+index fa9f386dc..984a4f9b7 100755
+--- a/src/3rdparty/chromium/third_party/libvpx/generate_gni.sh
++++ b/src/3rdparty/chromium/third_party/libvpx/generate_gni.sh
+@@ -135,6 +135,11 @@ function convert_srcs_to_project_files {
+       egrep 'neon.*(\.c|\.asm)$')
+   fi
+ 
++  if [ "libvpx_srcs_ppc64" == "$2" ]; then
++    local intrinsic_list=$(echo "$source_list" | \
++      egrep 'vsx.*(\.c|\.asm)$')
++  fi
++
+   # Remove these files from the main list.
+   source_list=$(comm -23 <(echo "$source_list") <(echo "$intrinsic_list"))
+ 
+@@ -168,11 +173,15 @@ function convert_srcs_to_project_files {
+     local assembly_sources=$(echo -e "$source_list\n$intrinsic_list" | \
+       egrep '.asm$')
+     local neon_sources=$(echo "$intrinsic_list" | grep '_neon\.c$')
++    local vsx_sources=$(echo "$intrinsic_list" | grep '_vsx\.c$')
+     write_gni c_sources $2 "$BASE_DIR/libvpx_srcs.gni"
+     write_gni assembly_sources $2_assembly "$BASE_DIR/libvpx_srcs.gni"
+     if [ 0 -ne ${#neon_sources} ]; then
+       write_gni neon_sources $2_neon "$BASE_DIR/libvpx_srcs.gni"
+     fi
++    if [ 0 -ne ${#vsx_sources} ]; then
++      write_gni vsx_sources $2_vsx "$BASE_DIR/libvpx_srcs.gni"
++    fi
+   fi
+ }
+ 
+@@ -361,9 +370,9 @@ gen_config_files linux/arm-neon-highbd "--target=armv7-linux-gcc ${all_platforms
+ gen_config_files linux/arm64-highbd "--target=armv8-linux-gcc ${all_platforms} ${HIGHBD}"
+ gen_config_files linux/mipsel "--target=mips32-linux-gcc ${all_platforms}"
+ gen_config_files linux/mips64el "--target=mips64-linux-gcc ${all_platforms}"
+-#gen_config_files linux/ppc64 "--target=ppc64le-linux-gcc ${all_platforms}"
+-gen_config_files linux/ppc64 "--target=generic-gnu $HIGHBD ${all_platforms}"
+ gen_config_files linux/generic "--target=generic-gnu $HIGHBD ${all_platforms}"
++gen_config_files linux/ppc64 "--target=ppc64-linux-gcc --enable-vsx ${all_platforms}"
++gen_config_files linux/ppc64le "--target=ppc64le-linux-gcc --enable-vsx ${all_platforms}"
+ gen_config_files win/arm64 "--target=arm64-win64-vs15 ${all_platforms} ${HIGHBD}"
+ gen_config_files win/ia32 "--target=x86-win32-vs14 ${all_platforms} ${x86_platforms}"
+ gen_config_files win/x64 "--target=x86_64-win64-vs14 ${all_platforms} ${x86_platforms}"
+@@ -389,6 +398,7 @@ lint_config linux/arm64-highbd
+ lint_config linux/mipsel
+ lint_config linux/mips64el
+ lint_config linux/ppc64
++lint_config linux/ppc64le
+ lint_config linux/generic
+ lint_config win/arm64
+ lint_config win/ia32
+@@ -418,7 +428,8 @@ gen_rtcd_header linux/arm-neon-highbd armv7
+ gen_rtcd_header linux/arm64-highbd armv8
+ gen_rtcd_header linux/mipsel mipsel
+ gen_rtcd_header linux/mips64el mips64el
+-gen_rtcd_header linux/ppc64 ppc
++gen_rtcd_header linux/ppc64 ppc64
++gen_rtcd_header linux/ppc64le ppc64le
+ gen_rtcd_header linux/generic generic
+ gen_rtcd_header win/arm64 armv8
+ gen_rtcd_header win/ia32 x86 "${require_sse2}"
+@@ -510,6 +521,14 @@ if [ -z $ONLY_CONFIGS ]; then
+   convert_srcs_to_project_files libvpx_srcs.txt libvpx_srcs_ppc64
+ 
+ 
++  echo "Generate PPC64 source list."
++  config=$(print_config_basic linux/ppc64)
++  make_clean
++  make libvpx_srcs.txt target=libs $config > /dev/null
++  convert_srcs_to_project_files libvpx_srcs.txt libvpx_srcs_ppc64
++
++  echo "PPC64LE source list is identical to PPC64 source list. No need to generate it."
++
+   echo "Generate NaCl source list."
+   config=$(print_config_basic nacl)
+   make_clean
+diff --git a/src/3rdparty/chromium/third_party/libvpx/libvpx_srcs.gni b/src/3rdparty/chromium/third_party/libvpx/libvpx_srcs.gni
+index 4426daa04..f2d103d7c 100644
+--- a/src/3rdparty/chromium/third_party/libvpx/libvpx_srcs.gni
++++ b/src/3rdparty/chromium/third_party/libvpx/libvpx_srcs.gni
+@@ -4006,6 +4006,10 @@ libvpx_srcs_ppc64 = [
+   "//third_party/libvpx/source/libvpx/vpx_dsp/inv_txfm.h",
+   "//third_party/libvpx/source/libvpx/vpx_dsp/loopfilter.c",
+   "//third_party/libvpx/source/libvpx/vpx_dsp/postproc.h",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/bitdepth_conversion_vsx.h",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/transpose_vsx.h",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/txfm_common_vsx.h",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/types_vsx.h",
+   "//third_party/libvpx/source/libvpx/vpx_dsp/prob.c",
+   "//third_party/libvpx/source/libvpx/vpx_dsp/prob.h",
+   "//third_party/libvpx/source/libvpx/vpx_dsp/psnr.c",
+@@ -4034,6 +4038,8 @@ libvpx_srcs_ppc64 = [
+   "//third_party/libvpx/source/libvpx/vpx_ports/mem_ops.h",
+   "//third_party/libvpx/source/libvpx/vpx_ports/mem_ops_aligned.h",
+   "//third_party/libvpx/source/libvpx/vpx_ports/msvc.h",
++  "//third_party/libvpx/source/libvpx/vpx_ports/ppc.h",
++  "//third_party/libvpx/source/libvpx/vpx_ports/ppc_cpudetect.c",
+   "//third_party/libvpx/source/libvpx/vpx_ports/static_assert.h",
+   "//third_party/libvpx/source/libvpx/vpx_ports/system_state.h",
+   "//third_party/libvpx/source/libvpx/vpx_ports/vpx_once.h",
+@@ -4054,6 +4060,20 @@ libvpx_srcs_ppc64 = [
+   "//third_party/libvpx/source/libvpx/vpx_util/vpx_write_yuv_frame.h",
+ ]
+ libvpx_srcs_ppc64_assembly = []
++libvpx_srcs_ppc64_vsx = [
++  "//third_party/libvpx/source/libvpx/vp9/common/ppc/vp9_idct_vsx.c",
++  "//third_party/libvpx/source/libvpx/vp9/encoder/ppc/vp9_quantize_vsx.c",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/deblock_vsx.c",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/fdct32x32_vsx.c",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/hadamard_vsx.c",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/intrapred_vsx.c",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/inv_txfm_vsx.c",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/quantize_vsx.c",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/sad_vsx.c",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/subtract_vsx.c",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/variance_vsx.c",
++  "//third_party/libvpx/source/libvpx/vpx_dsp/ppc/vpx_convolve_vsx.c",
++]
+ libvpx_srcs_nacl = [
+   "//third_party/libvpx/source/libvpx/vp8/common/alloccommon.c",
+   "//third_party/libvpx/source/libvpx/vp8/common/alloccommon.h",
+diff --git a/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.asm b/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.asm
+index 00712e52b..8da06a367 100644
+--- a/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.asm
++++ b/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.asm
+@@ -9,8 +9,8 @@
+ .equ ARCH_X86 ,  0
+ .equ VPX_ARCH_X86_64 ,  0
+ .equ ARCH_X86_64 ,  0
+-.equ VPX_ARCH_PPC ,  0
+-.equ ARCH_PPC ,  0
++.equ VPX_ARCH_PPC ,  1
++.equ ARCH_PPC ,  1
+ .equ HAVE_NEON ,  0
+ .equ HAVE_NEON_ASM ,  0
+ .equ HAVE_MIPS32 ,  0
+@@ -26,7 +26,7 @@
+ .equ HAVE_AVX ,  0
+ .equ HAVE_AVX2 ,  0
+ .equ HAVE_AVX512 ,  0
+-.equ HAVE_VSX ,  0
++.equ HAVE_VSX ,  1
+ .equ HAVE_MMI ,  0
+ .equ HAVE_VPX_PORTS ,  1
+ .equ HAVE_PTHREAD_H ,  1
+@@ -44,7 +44,7 @@
+ .equ CONFIG_GCC ,  1
+ .equ CONFIG_MSVS ,  0
+ .equ CONFIG_PIC ,  0
+-.equ CONFIG_BIG_ENDIAN ,  0
++.equ CONFIG_BIG_ENDIAN ,  1
+ .equ CONFIG_CODEC_SRCS ,  0
+ .equ CONFIG_DEBUG_LIBS ,  0
+ .equ CONFIG_DEQUANT_TOKENS ,  0
+@@ -74,7 +74,7 @@
+ .equ CONFIG_OS_SUPPORT ,  1
+ .equ CONFIG_UNIT_TESTS ,  1
+ .equ CONFIG_WEBM_IO ,  1
+-.equ CONFIG_LIBYUV ,  0
++.equ CONFIG_LIBYUV ,  1
+ .equ CONFIG_DECODE_PERF_TESTS ,  0
+ .equ CONFIG_ENCODE_PERF_TESTS ,  0
+ .equ CONFIG_MULTI_RES_ENCODING ,  1
+@@ -82,7 +82,7 @@
+ .equ CONFIG_VP9_TEMPORAL_DENOISING ,  1
+ .equ CONFIG_CONSISTENT_RECODE ,  0
+ .equ CONFIG_COEFFICIENT_RANGE_CHECKING ,  0
+-.equ CONFIG_VP9_HIGHBITDEPTH ,  1
++.equ CONFIG_VP9_HIGHBITDEPTH ,  0
+ .equ CONFIG_BETTER_HW_COMPATIBILITY ,  0
+ .equ CONFIG_EXPERIMENTAL ,  0
+ .equ CONFIG_SIZE_LIMIT ,  1
+diff --git a/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.c b/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.c
+index 8aad25ff1..e291b3a1b 100644
+--- a/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.c
++++ b/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.c
+@@ -6,5 +6,5 @@
+ /* in the file PATENTS.  All contributing project authors may */
+ /* be found in the AUTHORS file in the root of the source tree. */
+ #include "vpx/vpx_codec.h"
+-static const char* const cfg = "--target=generic-gnu --enable-vp9-highbitdepth --enable-external-build --enable-postproc --enable-multi-res-encoding --enable-temporal-denoising --enable-vp9-temporal-denoising --enable-vp9-postproc --size-limit=16384x16384 --enable-realtime-only --disable-install-docs --disable-libyuv";
++static const char* const cfg = "--target=ppc64-linux-gcc --enable-vsx --enable-external-build --enable-postproc --enable-multi-res-encoding --enable-temporal-denoising --enable-vp9-temporal-denoising --enable-vp9-postproc --size-limit=16384x16384 --enable-realtime-only --disable-install-docs";
+ const char *vpx_codec_build_config(void) {return cfg;}
+diff --git a/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.h b/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.h
+index fddb76bd2..6c1c9a477 100644
+--- a/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.h
++++ b/src/3rdparty/chromium/third_party/libvpx/source/config/linux/ppc64/vpx_config.h
+@@ -18,8 +18,8 @@
+ #define ARCH_X86 0
+ #define VPX_ARCH_X86_64 0
+ #define ARCH_X86_64 0
+-#define VPX_ARCH_PPC 0
+-#define ARCH_PPC 0
++#define VPX_ARCH_PPC 1
++#define ARCH_PPC 1
+ #define HAVE_NEON 0
+ #define HAVE_NEON_ASM 0
+ #define HAVE_MIPS32 0
+@@ -35,7 +35,7 @@
+ #define HAVE_AVX 0
+ #define HAVE_AVX2 0
+ #define HAVE_AVX512 0
+-#define HAVE_VSX 0
++#define HAVE_VSX 1
+ #define HAVE_MMI 0
+ #define HAVE_VPX_PORTS 1
+ #define HAVE_PTHREAD_H 1
+@@ -53,7 +53,7 @@
+ #define CONFIG_GCC 1
+ #define CONFIG_MSVS 0
+ #define CONFIG_PIC 0
+-#define CONFIG_BIG_ENDIAN 0
++#define CONFIG_BIG_ENDIAN 1
+ #define CONFIG_CODEC_SRCS 0
+ #define CONFIG_DEBUG_LIBS 0
+ #define CONFIG_DEQUANT_TOKENS 0
+@@ -83,7 +83,7 @@
+ #define CONFIG_OS_SUPPORT 1
+ #define CONFIG_UNIT_TESTS 1
+ #define CONFIG_WEBM_IO 1
+-#define CONFIG_LIBYUV 0
++#define CONFIG_LIBYUV 1
+ #define CONFIG_DECODE_PERF_TESTS 0
+ #define CONFIG_ENCODE_PERF_TESTS 0
+ #define CONFIG_MULTI_RES_ENCODING 1
+@@ -91,7 +91,7 @@
+ #define CONFIG_VP9_TEMPORAL_DENOISING 1
+ #define CONFIG_CONSISTENT_RECODE 0
+ #define CONFIG_COEFFICIENT_RANGE_CHECKING 0
+-#define CONFIG_VP9_HIGHBITDEPTH 1
++#define CONFIG_VP9_HIGHBITDEPTH 0
+ #define CONFIG_BETTER_HW_COMPATIBILITY 0
+ #define CONFIG_EXPERIMENTAL 0
+ #define CONFIG_SIZE_LIMIT 1
+diff --git a/src/3rdparty/chromium/third_party/libvpx/source/libvpx/build/make/configure.sh b/src/3rdparty/chromium/third_party/libvpx/source/libvpx/build/make/configure.sh
+index fc00a3273..547f33a82 100644
+--- a/src/3rdparty/chromium/third_party/libvpx/source/libvpx/build/make/configure.sh
++++ b/src/3rdparty/chromium/third_party/libvpx/source/libvpx/build/make/configure.sh
+@@ -756,6 +756,9 @@ process_common_toolchain() {
+         ;;
+       power*64le*-*)
+         tgt_isa=ppc64le
++	;;
++      power*64*-*)
++        tgt_isa=ppc64
+         ;;
+       *mips64el*)
+         tgt_isa=mips64
+@@ -824,8 +827,12 @@ process_common_toolchain() {
+     mips*)
+       enable_feature mips
+       ;;
++    ppc*le)
++      enable_feature ppc
++      ;;
+     ppc*)
+       enable_feature ppc
++      enable_feature big_endian
+       ;;
+   esac
+ 
+diff --git a/src/3rdparty/chromium/third_party/libvpx/source/libvpx/configure b/src/3rdparty/chromium/third_party/libvpx/source/libvpx/configure
+index 181e27b7c..d75e53508 100755
+--- a/src/3rdparty/chromium/third_party/libvpx/source/libvpx/configure
++++ b/src/3rdparty/chromium/third_party/libvpx/source/libvpx/configure
+@@ -114,6 +114,7 @@ all_platforms="${all_platforms} armv7s-darwin-gcc"
+ all_platforms="${all_platforms} armv8-linux-gcc"
+ all_platforms="${all_platforms} mips32-linux-gcc"
+ all_platforms="${all_platforms} mips64-linux-gcc"
++all_platforms="${all_platforms} ppc64-linux-gcc"
+ all_platforms="${all_platforms} ppc64le-linux-gcc"
+ all_platforms="${all_platforms} sparc-solaris-gcc"
+ all_platforms="${all_platforms} x86-android-gcc"
+-- 
+2.26.2
+

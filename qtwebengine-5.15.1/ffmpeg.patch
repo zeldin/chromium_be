@@ -1,0 +1,25 @@
+From 2f937ff78a3b90446ee8d1b8b9ee11d7d93751fc Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Mon, 24 Sep 2018 18:11:23 +0200
+Subject: [PATCH] build_ffmpeg: Recognize ppc64
+
+---
+ .../third_party/ffmpeg/chromium/scripts/build_ffmpeg.py         | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/build_ffmpeg.py b/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/build_ffmpeg.py
+index 205048778..85c29b0a7 100755
+--- a/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/build_ffmpeg.py
++++ b/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/build_ffmpeg.py
+@@ -128,7 +128,7 @@ def DetermineHostOsAndArch():
+     host_arch = 'mips64el'
+   elif platform.machine().startswith('arm'):
+     host_arch = 'arm'
+-  elif platform.machine() == 'ppc64le':
++  elif platform.machine() == 'ppc64' or platform.machine() == 'ppc64le':
+     host_arch = 'ppc64'
+   else:
+     return None
+-- 
+2.26.2
+

@@ -1,0 +1,139 @@
+From 10ed6360df1806805abd361aae7affe48a899507 Mon Sep 17 00:00:00 2001
+From: Georgy Yakovlev <gyakovlev@gentoo.org>
+Date: Wed, 27 May 2020 03:01:09 -0700
+Subject: [PATCH 2/3] ppc64 ffmpeg patchset
+
+---
+ .../ffmpeg/chromium/scripts/build_ffmpeg.py            | 10 ++++++++--
+ .../third_party/ffmpeg/chromium/scripts/copy_config.sh |  2 +-
+ .../third_party/ffmpeg/chromium/scripts/generate_gn.py |  2 +-
+ .../ffmpeg/chromium/scripts/generate_gn_unittest.py    | 10 ++++++++--
+ .../chromium/third_party/ffmpeg/libavformat/utils.c    |  2 +-
+ 5 files changed, 19 insertions(+), 7 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/build_ffmpeg.py b/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/build_ffmpeg.py
+index 23d5c0f57..205048778 100755
+--- a/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/build_ffmpeg.py
++++ b/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/build_ffmpeg.py
+@@ -36,7 +36,7 @@ ARCH_MAP = {
+     'android': ['ia32', 'x64', 'arm-neon', 'arm64'],
+     'linux': [
+         'ia32', 'x64', 'mipsel', 'mips64el', 'noasm-x64', 'arm', 'arm-neon',
+-        'arm64'
++        'arm64', 'ppc64'
+     ],
+     'mac': ['x64'],
+     'win': ['ia32', 'x64', 'arm64'],
+@@ -128,6 +128,8 @@ def DetermineHostOsAndArch():
+     host_arch = 'mips64el'
+   elif platform.machine().startswith('arm'):
+     host_arch = 'arm'
++  elif platform.machine() == 'ppc64le':
++    host_arch = 'ppc64'
+   else:
+     return None
+ 
+@@ -789,6 +791,10 @@ def ConfigureAndBuild(target_arch, target_os, host_os, host_arch, parallel_jobs,
+             '--extra-cflags=--target=mips64el-linux-gnuabi64',
+             '--extra-ldflags=--target=mips64el-linux-gnuabi64',
+         ])
++    elif target_arch == 'ppc64':
++      configure_flags['Common'].extend([
++        '--arch=ppc64le'
++      ])
+     else:
+       print(
+           'Error: Unknown target arch %r for target OS %r!' % (target_arch,
+@@ -814,7 +820,7 @@ def ConfigureAndBuild(target_arch, target_os, host_os, host_arch, parallel_jobs,
+     # typically be the system one, so explicitly configure use of Clang's
+     # ld.lld, to ensure that things like cross-compilation and LTO work.
+     # This does not work for ia32 and is always used on mac.
+-    if target_arch != 'ia32' and target_os != 'mac':
++    if target_arch not in ['ia32', 'ppc64'] and target_os != 'mac':
+       configure_flags['Common'].append('--extra-ldflags=-fuse-ld=lld')
+ 
+   # Should be run on Mac, unless we're cross-compiling on Linux.
+diff --git a/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/copy_config.sh b/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/copy_config.sh
+index 0e5159d6f..7e4e8175f 100755
+--- a/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/copy_config.sh
++++ b/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/copy_config.sh
+@@ -10,7 +10,7 @@ for os in android linux linux-noasm mac win; do
+     # Copy config files for various architectures:
+     #   - ia32/x64 have config.asm, config.h
+     #   - arm/arm-neon have config.h
+-    for arch in arm arm-neon arm64 ia32 x64 mipsel mips64el; do
++    for arch in arm arm-neon arm64 ia32 x64 mipsel mips64el ppc64; do
+       # Don't waste time on non-existent configs, if no config.h then skip.
+       [ ! -e "build.$arch.$os/$target/config.h" ] && continue
+       for f in config.h config.asm libavutil/avconfig.h libavutil/ffversion.h libavcodec/bsf_list.c libavcodec/codec_list.c libavcodec/parser_list.c libavformat/demuxer_list.c libavformat/muxer_list.c libavformat/protocol_list.c; do
+diff --git a/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/generate_gn.py b/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/generate_gn.py
+index d2b3d1052..f6dfbcadd 100755
+--- a/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/generate_gn.py
++++ b/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/generate_gn.py
+@@ -77,7 +77,7 @@ GN_SOURCE_END = """]
+ Attr = enum('ARCHITECTURE', 'TARGET', 'PLATFORM')
+ SUPPORT_MATRIX = {
+     Attr.ARCHITECTURE:
+-        set(['ia32', 'x64', 'arm', 'arm64', 'arm-neon', 'mipsel', 'mips64el']),
++        set(['ia32', 'x64', 'arm', 'arm64', 'arm-neon', 'mipsel', 'mips64el', 'ppc64']),
+     Attr.TARGET:
+         set(['Chromium', 'Chrome', 'ChromeOS']),
+     Attr.PLATFORM:
+diff --git a/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/generate_gn_unittest.py b/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/generate_gn_unittest.py
+index 9f3cf17e0..4bb4893a6 100755
+--- a/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/generate_gn_unittest.py
++++ b/src/3rdparty/chromium/third_party/ffmpeg/chromium/scripts/generate_gn_unittest.py
+@@ -324,6 +324,10 @@ class SourceSetUnittest(unittest.TestCase):
+     f = SourceSet(
+         set(['common', 'arm-neon', 'chrome', 'chromeos']),
+         set([SourceListCondition('arm-neon', 'ChromeOS', 'linux')]))
++    g = SourceSet(
++        set(['common']),
++        set([SourceListCondition('ppc64', 'Chromium', 'linux')]))
++
+ 
+     expected = set()
+     expected.add(
+@@ -335,7 +339,8 @@ class SourceSetUnittest(unittest.TestCase):
+                 SourceListCondition('x64', 'Chromium', 'linux'),
+                 SourceListCondition('x64', 'Chrome', 'linux'),
+                 SourceListCondition('arm', 'Chromium', 'linux'),
+-                SourceListCondition('arm-neon', 'ChromeOS', 'linux')
++                SourceListCondition('arm-neon', 'ChromeOS', 'linux'),
++                SourceListCondition('ppc64', 'Chromium', 'linux')
+             ])))
+     expected.add(
+         SourceSet(
+@@ -363,7 +368,7 @@ class SourceSetUnittest(unittest.TestCase):
+             set(['arm-neon', 'chromeos']),
+             set([SourceListCondition('arm-neon', 'ChromeOS', 'linux')])))
+ 
+-    source_sets = gg.CreatePairwiseDisjointSets([a, b, c, d, e, f])
++    source_sets = gg.CreatePairwiseDisjointSets([a, b, c, d, e, f, g])
+     self.assertEqualSourceSets(expected, set(source_sets))
+ 
+   def testReduceConditions(self):
+@@ -378,6 +383,7 @@ class SourceSetUnittest(unittest.TestCase):
+             SourceListCondition('arm-neon', 'Chromium', 'linux'),
+             SourceListCondition('mipsel', 'Chromium', 'linux'),
+             SourceListCondition('mips64el', 'Chromium', 'linux'),
++            SourceListCondition('ppc64', 'Chromium', 'linux'),
+         ]))
+     gg.ReduceConditionalLogic(a)
+ 
+diff --git a/src/3rdparty/chromium/third_party/ffmpeg/libavformat/utils.c b/src/3rdparty/chromium/third_party/ffmpeg/libavformat/utils.c
+index 7f2b248bf..ad57c11f4 100644
+--- a/src/3rdparty/chromium/third_party/ffmpeg/libavformat/utils.c
++++ b/src/3rdparty/chromium/third_party/ffmpeg/libavformat/utils.c
+@@ -3349,7 +3349,7 @@ int ff_get_extradata(AVFormatContext *s, AVCodecParameters *par, AVIOContext *pb
+ 
+ int ff_rfps_add_frame(AVFormatContext *ic, AVStream *st, int64_t ts)
+ {
+-    int i, j;
++    volatile int i, j;
+     int64_t last = st->info->last_dts;
+ 
+     if (   ts != AV_NOPTS_VALUE && last != AV_NOPTS_VALUE && ts > last
+-- 
+2.26.2
+

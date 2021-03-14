@@ -1,0 +1,79 @@
+From 5162d9981a3154c9aec95187842ecc9da258e23d Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:51:28 +0100
+Subject: [PATCH 1/2] Support 64K pages
+
+---
+ src/3rdparty/chromium/v8/src/base/platform/platform-posix.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/v8/src/base/platform/platform-posix.cc b/src/3rdparty/chromium/v8/src/base/platform/platform-posix.cc
+index 0424d4c13..340a137d7 100644
+--- a/src/3rdparty/chromium/v8/src/base/platform/platform-posix.cc
++++ b/src/3rdparty/chromium/v8/src/base/platform/platform-posix.cc
+@@ -273,7 +273,7 @@ void* OS::GetRandomMmapAddr() {
+   raw_addr += uint64_t{0x400000000000};
+ #elif V8_TARGET_BIG_ENDIAN
+   // Big-endian Linux: 42 bits of virtual addressing.
+-  raw_addr &= uint64_t{0x03FFFFFFF000};
++  raw_addr &= uint64_t{0x03FFFFFF0000};
+ #else
+   // Little-endian Linux: 46 bits of virtual addressing.
+   raw_addr &= uint64_t{0x3FFFFFFF0000};
+-- 
+2.26.2
+
+
+From b7694dd416a17dad32d804b7d366cf836e5ff29a Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:52:44 +0100
+Subject: [PATCH 2/2] Change function descriptor tests to not rely on AIX
+
+---
+ .../chromium/v8/src/compiler/backend/instruction-selector.cc    | 2 +-
+ .../chromium/v8/src/compiler/backend/ppc/code-generator-ppc.cc  | 2 +-
+ src/3rdparty/chromium/v8/src/execution/simulator.h              | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/3rdparty/chromium/v8/src/compiler/backend/instruction-selector.cc b/src/3rdparty/chromium/v8/src/compiler/backend/instruction-selector.cc
+index e5579d27e..64e017a9d 100644
+--- a/src/3rdparty/chromium/v8/src/compiler/backend/instruction-selector.cc
++++ b/src/3rdparty/chromium/v8/src/compiler/backend/instruction-selector.cc
+@@ -2799,7 +2799,7 @@ void InstructionSelector::VisitCall(Node* node, BasicBlock* handler) {
+   switch (call_descriptor->kind()) {
+     case CallDescriptor::kCallAddress: {
+       int misc_field = static_cast<int>(call_descriptor->ParameterCount());
+-#if defined(_AIX)
++#if ABI_USES_FUNCTION_DESCRIPTORS
+       // Highest misc_field bit is used on AIX to indicate if a CFunction call
+       // has function descriptor or not.
+       if (!call_descriptor->NoFunctionDescriptor()) {
+diff --git a/src/3rdparty/chromium/v8/src/compiler/backend/ppc/code-generator-ppc.cc b/src/3rdparty/chromium/v8/src/compiler/backend/ppc/code-generator-ppc.cc
+index e351cfb8f..bed31df69 100644
+--- a/src/3rdparty/chromium/v8/src/compiler/backend/ppc/code-generator-ppc.cc
++++ b/src/3rdparty/chromium/v8/src/compiler/backend/ppc/code-generator-ppc.cc
+@@ -1032,7 +1032,7 @@ CodeGenerator::CodeGenResult CodeGenerator::AssembleArchInstruction(
+       bool isWasmCapiFunction =
+           linkage()->GetIncomingDescriptor()->IsWasmCapiFunction();
+       int offset = 9 * kInstrSize;
+-#if defined(_AIX)
++#if ABI_USES_FUNCTION_DESCRIPTORS
+       // AIX/PPC64BE Linux uses a function descriptor
+       int kNumParametersMask = kHasFunctionDescriptorBitMask - 1;
+       num_parameters = kNumParametersMask & misc_field;
+diff --git a/src/3rdparty/chromium/v8/src/execution/simulator.h b/src/3rdparty/chromium/v8/src/execution/simulator.h
+index 4000973a2..23573ee9e 100644
+--- a/src/3rdparty/chromium/v8/src/execution/simulator.h
++++ b/src/3rdparty/chromium/v8/src/execution/simulator.h
+@@ -128,7 +128,7 @@ class GeneratedCode {
+ #if defined(V8_TARGET_OS_WIN) && !defined(V8_OS_WIN)
+     FATAL("Generated code execution not possible during cross-compilation.");
+ #endif  // defined(V8_TARGET_OS_WIN) && !defined(V8_OS_WIN)
+-#if V8_OS_AIX
++#if USES_FUNCTION_DESCRIPTORS
+     // AIX ABI requires function descriptors (FD).  Artificially create a pseudo
+     // FD to ensure correct dispatch to generated code.  The 'volatile'
+     // declaration is required to avoid the compiler from not observing the
+-- 
+2.26.2
+

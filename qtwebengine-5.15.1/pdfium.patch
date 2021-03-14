@@ -1,0 +1,52 @@
+From 25419959e25b165e391a56b0106b85c92ab8d399 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:30:09 +0100
+Subject: [PATCH] Support 64K pages on ppc64
+
+---
+ .../partition_allocator/page_allocator_constants.h          | 6 ++++--
+ .../partition_allocator/partition_alloc_constants.h         | 4 +++-
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/pdfium/third_party/base/allocator/partition_allocator/page_allocator_constants.h b/src/3rdparty/chromium/third_party/pdfium/third_party/base/allocator/partition_allocator/page_allocator_constants.h
+index 945273b1f..c412b76c2 100644
+--- a/src/3rdparty/chromium/third_party/pdfium/third_party/base/allocator/partition_allocator/page_allocator_constants.h
++++ b/src/3rdparty/chromium/third_party/pdfium/third_party/base/allocator/partition_allocator/page_allocator_constants.h
+@@ -11,7 +11,7 @@
+ 
+ namespace pdfium {
+ namespace base {
+-#if defined(OS_WIN)
++#if defined(OS_WIN) || defined(__powerpc64__)
+ static constexpr size_t kPageAllocationGranularityShift = 16;  // 64KB
+ #elif defined(_MIPS_ARCH_LOONGSON)
+ static constexpr size_t kPageAllocationGranularityShift = 14;  // 16KB
+@@ -25,7 +25,9 @@ static constexpr size_t kPageAllocationGranularityOffsetMask =
+ static constexpr size_t kPageAllocationGranularityBaseMask =
+     ~kPageAllocationGranularityOffsetMask;
+ 
+-#if defined(_MIPS_ARCH_LOONGSON)
++#if defined(__powerpc64__)
++static constexpr size_t kSystemPageSize = 65536;
++#elif defined(_MIPS_ARCH_LOONGSON)
+ static constexpr size_t kSystemPageSize = 16384;
+ #else
+ static constexpr size_t kSystemPageSize = 4096;
+diff --git a/src/3rdparty/chromium/third_party/pdfium/third_party/base/allocator/partition_allocator/partition_alloc_constants.h b/src/3rdparty/chromium/third_party/pdfium/third_party/base/allocator/partition_allocator/partition_alloc_constants.h
+index 437e4dffd..3f40c322b 100644
+--- a/src/3rdparty/chromium/third_party/pdfium/third_party/base/allocator/partition_allocator/partition_alloc_constants.h
++++ b/src/3rdparty/chromium/third_party/pdfium/third_party/base/allocator/partition_allocator/partition_alloc_constants.h
+@@ -34,7 +34,9 @@ static const size_t kBucketShift = (kAllocationGranularity == 8) ? 3 : 2;
+ // other constant values, we pack _all_ `PartitionRootGeneric::Alloc` sizes
+ // perfectly up against the end of a system page.
+ 
+-#if defined(_MIPS_ARCH_LOONGSON)
++#if defined(__powerpc64__)
++static const size_t kPartitionPageShift = 18;  // 256 KiB
++#elif defined(_MIPS_ARCH_LOONGSON)
+ static const size_t kPartitionPageShift = 16;  // 64 KiB
+ #else
+ static const size_t kPartitionPageShift = 14;  // 16 KiB
+-- 
+2.26.2
+
