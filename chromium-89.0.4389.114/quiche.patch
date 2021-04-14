@@ -1,0 +1,109 @@
+From e5c68459e3ee99af26d85fae764d9c02fac7e8e3 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 11 Apr 2021 15:51:20 +0200
+Subject: [PATCH 1/3] simple_epoll_server: Include <string.h> for strerror_r
+
+---
+ net/third_party/quiche/src/epoll_server/simple_epoll_server.cc | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/net/third_party/quiche/src/epoll_server/simple_epoll_server.cc b/net/third_party/quiche/src/epoll_server/simple_epoll_server.cc
+index 09831dbf76..5918447ce7 100644
+--- a/net/third_party/quiche/src/epoll_server/simple_epoll_server.cc
++++ b/net/third_party/quiche/src/epoll_server/simple_epoll_server.cc
+@@ -7,6 +7,7 @@
+ #include <errno.h>   // for errno and strerror_r
+ #include <stdlib.h>  // for abort
+ #include <unistd.h>  // For read, pipe, close and write.
++#include <string.h>
+ 
+ #include <algorithm>
+ #include <utility>
+-- 
+2.26.3
+
+
+From 4269421ba2888c3a0a42401ad98ee02d39b6d169 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 11 Apr 2021 15:52:01 +0200
+Subject: [PATCH 2/3] quiche_endian: Include <array> for std::begin
+
+---
+ net/third_party/quiche/src/common/quiche_endian.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/net/third_party/quiche/src/common/quiche_endian.h b/net/third_party/quiche/src/common/quiche_endian.h
+index f322b04406..f7ee929d70 100644
+--- a/net/third_party/quiche/src/common/quiche_endian.h
++++ b/net/third_party/quiche/src/common/quiche_endian.h
+@@ -8,6 +8,7 @@
+ #include <algorithm>
+ #include <cstdint>
+ #include <type_traits>
++#include <array>
+ 
+ #include "common/platform/api/quiche_export.h"
+ 
+-- 
+2.26.3
+
+
+From 2881a95ea125835bc7caa36e0d0601d84564fcbe Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 11 Apr 2021 15:52:57 +0200
+Subject: [PATCH 3/3] quiche_endian: Handle big endian hosts correctly
+
+---
+ net/third_party/quiche/src/common/quiche_endian.h | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/net/third_party/quiche/src/common/quiche_endian.h b/net/third_party/quiche/src/common/quiche_endian.h
+index f7ee929d70..029124c0b1 100644
+--- a/net/third_party/quiche/src/common/quiche_endian.h
++++ b/net/third_party/quiche/src/common/quiche_endian.h
+@@ -16,7 +16,7 @@ namespace quiche {
+ 
+ enum Endianness {
+   NETWORK_BYTE_ORDER,  // big endian
+-  HOST_BYTE_ORDER      // little endian
++  HOST_BYTE_ORDER      // either little or big endian
+ };
+ 
+ // Provide utility functions that convert from/to network order (big endian)
+@@ -24,6 +24,7 @@ enum Endianness {
+ // platform).
+ class QUICHE_EXPORT_PRIVATE QuicheEndian {
+  public:
++#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+   // Convert |x| from host order (little endian) to network order (big endian).
+ #if defined(__clang__) || \
+     (defined(__GNUC__) && \
+@@ -36,14 +37,24 @@ class QUICHE_EXPORT_PRIVATE QuicheEndian {
+   static uint32_t HostToNet32(uint32_t x) { return PortableByteSwap(x); }
+   static uint64_t HostToNet64(uint64_t x) { return PortableByteSwap(x); }
+ #endif
++#else
++  // Host order is the same as network order (big endian)
++  static uint16_t HostToNet16(uint16_t x) { return x; }
++  static uint32_t HostToNet32(uint32_t x) { return x; }
++  static uint64_t HostToNet64(uint64_t x) { return x; }
++#endif
+ 
+-  // Convert |x| from network order (big endian) to host order (little endian).
++  // Convert |x| from network order (big endian) to host order (little/big endian).
+   static uint16_t NetToHost16(uint16_t x) { return HostToNet16(x); }
+   static uint32_t NetToHost32(uint32_t x) { return HostToNet32(x); }
+   static uint64_t NetToHost64(uint64_t x) { return HostToNet64(x); }
+ 
+   // Returns true if current host order is little endian.
++#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+   static bool HostIsLittleEndian() { return true; }
++#else
++  static bool HostIsLittleEndian() { return false; }
++#endif
+ 
+   // Left public for tests.
+   template <typename T>
+-- 
+2.26.3
+
