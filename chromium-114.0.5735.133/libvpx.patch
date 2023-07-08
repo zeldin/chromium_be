@@ -1,0 +1,762 @@
+From 7e985c99f199f84e5ebf415441869c92f73fe0e8 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:25:36 +0100
+Subject: [PATCH 1/2] Interpret "ppc64" as big endian
+
+---
+ third_party/libvpx/BUILD.gn                   | 23 ++++++++++++++++++-
+ third_party/libvpx/generate_gni.sh            | 20 +++++++++++++---
+ .../source/config/linux/ppc64/vpx_config.asm  |  8 +++----
+ .../source/config/linux/ppc64/vpx_config.c    |  2 +-
+ .../source/config/linux/ppc64/vpx_config.h    |  8 +++----
+ .../source/libvpx/build/make/configure.sh     |  7 ++++++
+ third_party/libvpx/source/libvpx/configure    |  1 +
+ 7 files changed, 56 insertions(+), 13 deletions(-)
+
+diff --git a/third_party/libvpx/BUILD.gn b/third_party/libvpx/BUILD.gn
+index d020f9c3e2..3fbc46e93f 100644
+--- a/third_party/libvpx/BUILD.gn
++++ b/third_party/libvpx/BUILD.gn
+@@ -291,6 +291,19 @@ if (current_cpu == "arm") {
+   }
+ }
+ 
++if (current_cpu == "ppc64" || current_cpu == "ppc64el") {
++  source_set("libvpx_intrinsics_vsx") {
++    configs -= [ "//build/config/compiler:chromium_code" ]
++    configs += [ "//build/config/compiler:no_chromium_code" ]
++    configs += [ ":libvpx_config" ]
++    cflags = [
++      "-maltivec",
++      "-mvsx",
++    ]
++    sources = libvpx_srcs_ppc64_vsx
++  }
++}
++
+ # Converts ARM assembly files to GAS style.
+ if (current_cpu == "arm" && arm_assembly_sources != []) {
+   action_foreach("convert_arm_assembly") {
+@@ -374,6 +387,10 @@ source_set("libvpx_mips_headers") {
+   sources = libvpx_srcs_mips_headers
+ }
+ 
++source_set("libvpx_ppc64_headers") {
++  sources = libvpx_srcs_ppc64_headers
++}
++
+ source_set("libvpx_nacl_headers") {
+   sources = libvpx_srcs_nacl_headers
+ }
+@@ -427,8 +444,9 @@ static_library("libvpx") {
+       sources = libvpx_srcs_arm64
+       public_deps = [ ":libvpx_arm64_headers" ]
+     }
+-  } else if (current_cpu == "ppc64") {
++  } else if (current_cpu == "ppc64" || current_cpu == "ppc64el") {
+     sources = libvpx_srcs_ppc64
++    public_deps = [ ":libvpx_ppc64_headers" ]
+   } else if (current_cpu == "riscv64") {
+     sources = libvpx_srcs_generic
+     public_deps = [ ":libvpx_generic_headers" ]
+@@ -465,6 +483,9 @@ static_library("libvpx") {
+   if (current_cpu == "loong64") {
+     deps += [ ":libvpx_loongarch_lsx" ]
+   }
++  if (current_cpu == "ppc64" || current_cpu == "ppc64el") {
++    deps += [ ":libvpx_intrinsics_vsx" ]
++  }
+ 
+   public_configs = [ ":libvpx_external_config" ]
+ }
+diff --git a/third_party/libvpx/generate_gni.sh b/third_party/libvpx/generate_gni.sh
+index f10b1ed1b8..f8e9f6557b 100755
+--- a/third_party/libvpx/generate_gni.sh
++++ b/third_party/libvpx/generate_gni.sh
+@@ -151,6 +151,11 @@ function convert_srcs_to_project_files() {
+     local intrinsic_list=$(echo "$source_list" | egrep '(lsx).(c|h)$')
+   fi
+ 
++  if [ "libvpx_srcs_ppc64" == "$2" ]; then
++    local intrinsic_list=$(echo "$source_list" | \
++      egrep 'vsx.*(\.c|\.asm)$')
++  fi
++
+   # Remove these files from the main list.
+   source_list=$(comm -23 <(echo "$source_list") <(echo "$intrinsic_list"))
+ 
+@@ -195,12 +200,16 @@ function convert_srcs_to_project_files() {
+       local assembly_sources=$(echo -e "$source_list\n$intrinsic_list" | \
+         egrep '\.asm$')
+       local neon_sources=$(echo "$intrinsic_list" | grep '_neon\.c$')
++      local vsx_sources=$(echo "$intrinsic_list" | grep '_vsx\.c$')
+       write_gni c_sources $2 "$BASE_DIR/libvpx_srcs.gni"
+       write_gni c_headers $2_headers "$BASE_DIR/libvpx_srcs.gni"
+       write_gni assembly_sources $2_assembly "$BASE_DIR/libvpx_srcs.gni"
+       if [ 0 -ne ${#neon_sources} ]; then
+         write_gni neon_sources $2_neon "$BASE_DIR/libvpx_srcs.gni"
+       fi
++      if [ 0 -ne ${#vsx_sources} ]; then
++        write_gni vsx_sources $2_vsx "$BASE_DIR/libvpx_srcs.gni"
++      fi
+      fi
+   fi
+ }
+@@ -405,7 +414,8 @@ gen_config_files linux/mipsel "--target=mips32-linux-gcc ${all_platforms}"
+ gen_config_files linux/mips64el "--target=mips64-linux-gcc ${all_platforms}"
+ gen_config_files linux/loongarch \
+   "--target=loongarch64-linux-gcc ${all_platforms}"
+-gen_config_files linux/ppc64 "--target=generic-gnu $HIGHBD ${all_platforms}"
++gen_config_files linux/ppc64 "--target=ppc64-linux-gcc --enable-vsx $HIGHBD ${all_platforms}"
++gen_config_files linux/ppc64le "--target=ppc64le-linux-gcc --enable-vsx $HIGHBD ${all_platforms}"
+ gen_config_files linux/generic "--target=generic-gnu $HIGHBD ${all_platforms}"
+ gen_config_files win/arm64 \
+   "--target=arm64-win64-vs15 ${all_platforms} ${HIGHBD}"
+@@ -438,6 +448,7 @@ lint_config linux/mipsel
+ lint_config linux/mips64el
+ lint_config linux/loongarch
+ lint_config linux/ppc64
++lint_config linux/ppc64le
+ lint_config linux/generic
+ lint_config win/arm64
+ lint_config win/ia32
+@@ -468,7 +479,8 @@ gen_rtcd_header linux/arm64-highbd armv8
+ gen_rtcd_header linux/mipsel mipsel
+ gen_rtcd_header linux/mips64el mips64el
+ gen_rtcd_header linux/loongarch loongarch
+-gen_rtcd_header linux/ppc64 ppc
++gen_rtcd_header linux/ppc64 ppc64
++gen_rtcd_header linux/ppc64le ppc64le
+ gen_rtcd_header linux/generic generic
+ gen_rtcd_header win/arm64 armv8
+ gen_rtcd_header win/ia32 x86 "${require_sse2}"
+@@ -562,12 +574,14 @@ if [[ -z $ONLY_CONFIGS ]]; then
+   make libvpx_srcs.txt target=libs $config > /dev/null
+   convert_srcs_to_project_files libvpx_srcs.txt libvpx_srcs_loongarch
+ 
+-  echo "Generate ppc64 source list."
++  echo "Generate PPC64 source list."
+   config=$(print_config_basic linux/ppc64)
+   make_clean
+   make libvpx_srcs.txt target=libs $config > /dev/null
+   convert_srcs_to_project_files libvpx_srcs.txt libvpx_srcs_ppc64
+ 
++  echo "PPC64LE source list is identical to PPC64 source list. No need to generate it."
++
+ 
+   echo "Generate NaCl source list."
+   config=$(print_config_basic nacl)
+diff --git a/third_party/libvpx/source/config/linux/ppc64/vpx_config.asm b/third_party/libvpx/source/config/linux/ppc64/vpx_config.asm
+index c7b60a243e..d6e2c457a9 100644
+--- a/third_party/libvpx/source/config/linux/ppc64/vpx_config.asm
++++ b/third_party/libvpx/source/config/linux/ppc64/vpx_config.asm
+@@ -9,8 +9,8 @@
+ .equ ARCH_X86 ,  0
+ .equ VPX_ARCH_X86_64 ,  0
+ .equ ARCH_X86_64 ,  0
+-.equ VPX_ARCH_PPC ,  0
+-.equ ARCH_PPC ,  0
++.equ VPX_ARCH_PPC ,  1
++.equ ARCH_PPC ,  1
+ .equ VPX_ARCH_LOONGARCH ,  0
+ .equ ARCH_LOONGARCH ,  0
+ .equ HAVE_NEON ,  0
+@@ -28,7 +28,7 @@
+ .equ HAVE_AVX ,  0
+ .equ HAVE_AVX2 ,  0
+ .equ HAVE_AVX512 ,  0
+-.equ HAVE_VSX ,  0
++.equ HAVE_VSX ,  1
+ .equ HAVE_MMI ,  0
+ .equ HAVE_LSX ,  0
+ .equ HAVE_LASX ,  0
+@@ -48,7 +48,7 @@
+ .equ CONFIG_GCC ,  1
+ .equ CONFIG_MSVS ,  0
+ .equ CONFIG_PIC ,  0
+-.equ CONFIG_BIG_ENDIAN ,  0
++.equ CONFIG_BIG_ENDIAN ,  1
+ .equ CONFIG_CODEC_SRCS ,  0
+ .equ CONFIG_DEBUG_LIBS ,  0
+ .equ CONFIG_DEQUANT_TOKENS ,  0
+diff --git a/third_party/libvpx/source/config/linux/ppc64/vpx_config.c b/third_party/libvpx/source/config/linux/ppc64/vpx_config.c
+index 8aad25ff17..d868271f41 100644
+--- a/third_party/libvpx/source/config/linux/ppc64/vpx_config.c
++++ b/third_party/libvpx/source/config/linux/ppc64/vpx_config.c
+@@ -6,5 +6,5 @@
+ /* in the file PATENTS.  All contributing project authors may */
+ /* be found in the AUTHORS file in the root of the source tree. */
+ #include "vpx/vpx_codec.h"
+-static const char* const cfg = "--target=generic-gnu --enable-vp9-highbitdepth --enable-external-build --enable-postproc --enable-multi-res-encoding --enable-temporal-denoising --enable-vp9-temporal-denoising --enable-vp9-postproc --size-limit=16384x16384 --enable-realtime-only --disable-install-docs --disable-libyuv";
++static const char* const cfg = "--target=ppc64-linux-gcc --enable-vsx --enable-vp9-highbitdepth --enable-external-build --enable-postproc --enable-multi-res-encoding --enable-temporal-denoising --enable-vp9-temporal-denoising --enable-vp9-postproc --size-limit=16384x16384 --enable-realtime-only --disable-install-docs --disable-libyuv";
+ const char *vpx_codec_build_config(void) {return cfg;}
+diff --git a/third_party/libvpx/source/config/linux/ppc64/vpx_config.h b/third_party/libvpx/source/config/linux/ppc64/vpx_config.h
+index f0664c038e..7b06bc6e2c 100644
+--- a/third_party/libvpx/source/config/linux/ppc64/vpx_config.h
++++ b/third_party/libvpx/source/config/linux/ppc64/vpx_config.h
+@@ -18,8 +18,8 @@
+ #define ARCH_X86 0
+ #define VPX_ARCH_X86_64 0
+ #define ARCH_X86_64 0
+-#define VPX_ARCH_PPC 0
+-#define ARCH_PPC 0
++#define VPX_ARCH_PPC 1
++#define ARCH_PPC 1
+ #define VPX_ARCH_LOONGARCH 0
+ #define ARCH_LOONGARCH 0
+ #define HAVE_NEON 0
+@@ -37,7 +37,7 @@
+ #define HAVE_AVX 0
+ #define HAVE_AVX2 0
+ #define HAVE_AVX512 0
+-#define HAVE_VSX 0
++#define HAVE_VSX 1
+ #define HAVE_MMI 0
+ #define HAVE_LSX 0
+ #define HAVE_LASX 0
+@@ -57,7 +57,7 @@
+ #define CONFIG_GCC 1
+ #define CONFIG_MSVS 0
+ #define CONFIG_PIC 0
+-#define CONFIG_BIG_ENDIAN 0
++#define CONFIG_BIG_ENDIAN 1
+ #define CONFIG_CODEC_SRCS 0
+ #define CONFIG_DEBUG_LIBS 0
+ #define CONFIG_DEQUANT_TOKENS 0
+diff --git a/third_party/libvpx/source/libvpx/build/make/configure.sh b/third_party/libvpx/source/libvpx/build/make/configure.sh
+index 4bf090f006..9357550df5 100644
+--- a/third_party/libvpx/source/libvpx/build/make/configure.sh
++++ b/third_party/libvpx/source/libvpx/build/make/configure.sh
+@@ -770,6 +770,9 @@ process_common_toolchain() {
+         ;;
+       power*64le*-*)
+         tgt_isa=ppc64le
++	;;
++      power*64*-*)
++        tgt_isa=ppc64
+         ;;
+       *mips64el*)
+         tgt_isa=mips64
+@@ -848,8 +851,12 @@ process_common_toolchain() {
+     mips*)
+       enable_feature mips
+       ;;
++    ppc*le)
++      enable_feature ppc
++      ;;
+     ppc*)
+       enable_feature ppc
++      enable_feature big_endian
+       ;;
+     loongarch*)
+       soft_enable lsx
+diff --git a/third_party/libvpx/source/libvpx/configure b/third_party/libvpx/source/libvpx/configure
+index 890ad3968a..153e2b67c4 100755
+--- a/third_party/libvpx/source/libvpx/configure
++++ b/third_party/libvpx/source/libvpx/configure
+@@ -123,6 +123,7 @@ all_platforms="${all_platforms} loongarch32-linux-gcc"
+ all_platforms="${all_platforms} loongarch64-linux-gcc"
+ all_platforms="${all_platforms} mips32-linux-gcc"
+ all_platforms="${all_platforms} mips64-linux-gcc"
++all_platforms="${all_platforms} ppc64-linux-gcc"
+ all_platforms="${all_platforms} ppc64le-linux-gcc"
+ all_platforms="${all_platforms} sparc-solaris-gcc"
+ all_platforms="${all_platforms} x86-android-gcc"
+-- 
+2.39.3
+
+
+From 037ad65b08f127aaf9e9b20b3bdcacf096b931b9 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Mon, 3 Jul 2023 12:08:25 +0200
+Subject: [PATCH 2/2] Fix VSX high bitdepth support
+
+---
+ .../libvpx/vp9/encoder/ppc/vp9_quantize_vsx.c |  83 ++++++--------
+ .../source/libvpx/vpx_dsp/ppc/fdct32x32_vsx.c | 101 +++++++-----------
+ .../source/libvpx/vpx_dsp/ppc/quantize_vsx.c  |  83 ++++++--------
+ 3 files changed, 102 insertions(+), 165 deletions(-)
+
+diff --git a/third_party/libvpx/source/libvpx/vp9/encoder/ppc/vp9_quantize_vsx.c b/third_party/libvpx/source/libvpx/vp9/encoder/ppc/vp9_quantize_vsx.c
+index ed8d67fa68..788cdaa960 100644
+--- a/third_party/libvpx/source/libvpx/vp9/encoder/ppc/vp9_quantize_vsx.c
++++ b/third_party/libvpx/source/libvpx/vp9/encoder/ppc/vp9_quantize_vsx.c
+@@ -12,6 +12,7 @@
+ 
+ #include "./vp9_rtcd.h"
+ #include "vpx_dsp/ppc/types_vsx.h"
++#include "vpx_dsp/ppc/bitdepth_conversion_vsx.h"
+ 
+ // Multiply the packed 16-bit integers in a and b, producing intermediate 32-bit
+ // integers, and return the high 16 bits of the intermediate integers.
+@@ -38,28 +39,6 @@ static INLINE int16x8_t vec_max_across(int16x8_t a) {
+   return vec_max(a, vec_perm(a, a, vec_perm16));
+ }
+ 
+-static INLINE void
+-vec_u64_store(vector unsigned long long vecu64, unsigned long offset, void *ptr)
+-{
+-#ifndef WORDS_BIGENDIAN
+-  __asm__ ("xxswapd %x0, %x1"
+-	   : "=wa" (vecu64)
+-	   : "wa" (vecu64));
+-#endif
+-#if __GNUC__ >= 4
+-  if (__builtin_constant_p (offset) && offset == 0)
+-    __asm__ ("stxvd2x %x0,0,%1\n\t"
+-	     :
+-	     : "wa" (vecu64), "r" ((uintptr_t)ptr)
+-	     : "memory");
+-  else
+-#endif
+-    __asm__ ("stxvd2x %x0,%1,%2\n\t"
+-	     :
+-	     : "wa" (vecu64), "r" (offset), "r" ((uintptr_t)ptr)
+-	     : "memory", "r0");
+-}
+-
+ void vp9_quantize_fp_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+                          const int16_t *round_ptr, const int16_t *quant_ptr,
+                          tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr,
+@@ -71,8 +50,8 @@ void vp9_quantize_fp_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+   int16x8_t round = vec_vsx_ld(0, round_ptr);
+   int16x8_t quant = vec_vsx_ld(0, quant_ptr);
+   int16x8_t dequant = vec_vsx_ld(0, dequant_ptr);
+-  int16x8_t coeff0 = vec_vsx_ld(0, coeff_ptr);
+-  int16x8_t coeff1 = vec_vsx_ld(16, coeff_ptr);
++  int16x8_t coeff0 = load_tran_low(0, coeff_ptr);
++  int16x8_t coeff1 = load_tran_low(16, coeff_ptr);
+   int16x8_t scan0 = vec_vsx_ld(0, iscan);
+   int16x8_t scan1 = vec_vsx_ld(16, iscan);
+ 
+@@ -82,10 +61,10 @@ void vp9_quantize_fp_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+   qcoeff0 = vec_mulhi(vec_vaddshs(vec_abs(coeff0), round), quant);
+   zero_coeff0 = vec_cmpeq(qcoeff0, vec_zeros_s16);
+   qcoeff0 = vec_sign(qcoeff0, coeff0);
+-  vec_u64_store(qcoeff0, 0, qcoeff_ptr);
++  store_tran_low(qcoeff0, 0, qcoeff_ptr);
+ 
+   dqcoeff0 = vec_mladd(qcoeff0, dequant, vec_zeros_s16);
+-  vec_u64_store(dqcoeff0, 0, dqcoeff_ptr);
++  store_tran_low(dqcoeff0, 0, dqcoeff_ptr);
+ 
+   // Remove DC value from round and quant
+   round = vec_splat(round, 1);
+@@ -98,10 +77,10 @@ void vp9_quantize_fp_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+   qcoeff1 = vec_mulhi(vec_vaddshs(vec_abs(coeff1), round), quant);
+   zero_coeff1 = vec_cmpeq(qcoeff1, vec_zeros_s16);
+   qcoeff1 = vec_sign(qcoeff1, coeff1);
+-  vec_u64_store(qcoeff1, 16, qcoeff_ptr);
++  store_tran_low(qcoeff1, 16, qcoeff_ptr);
+ 
+   dqcoeff1 = vec_mladd(qcoeff1, dequant, vec_zeros_s16);
+-  vec_u64_store(dqcoeff1, 16, dqcoeff_ptr);
++  store_tran_low(dqcoeff1, 16, dqcoeff_ptr);
+ 
+   eob = vec_max(vec_or(scan0, zero_coeff0), vec_or(scan1, zero_coeff1));
+ 
+@@ -119,9 +98,9 @@ void vp9_quantize_fp_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+     int off2 = 64;
+ 
+     do {
+-      coeff0 = vec_vsx_ld(off0, coeff_ptr);
+-      coeff1 = vec_vsx_ld(off1, coeff_ptr);
+-      coeff2 = vec_vsx_ld(off2, coeff_ptr);
++      coeff0 = load_tran_low(off0, coeff_ptr);
++      coeff1 = load_tran_low(off1, coeff_ptr);
++      coeff2 = load_tran_low(off2, coeff_ptr);
+       scan0 = vec_vsx_ld(off0, iscan);
+       scan1 = vec_vsx_ld(off1, iscan);
+       scan2 = vec_vsx_ld(off2, iscan);
+@@ -129,23 +108,23 @@ void vp9_quantize_fp_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+       qcoeff0 = vec_mulhi(vec_vaddshs(vec_abs(coeff0), round), quant);
+       zero_coeff0 = vec_cmpeq(qcoeff0, vec_zeros_s16);
+       qcoeff0 = vec_sign(qcoeff0, coeff0);
+-      vec_u64_store(qcoeff0, off0, qcoeff_ptr);
++      store_tran_low(qcoeff0, off0, qcoeff_ptr);
+       dqcoeff0 = vec_mladd(qcoeff0, dequant, vec_zeros_s16);
+-      vec_u64_store(dqcoeff0, off0, dqcoeff_ptr);
++      store_tran_low(dqcoeff0, off0, dqcoeff_ptr);
+ 
+       qcoeff1 = vec_mulhi(vec_vaddshs(vec_abs(coeff1), round), quant);
+       zero_coeff1 = vec_cmpeq(qcoeff1, vec_zeros_s16);
+       qcoeff1 = vec_sign(qcoeff1, coeff1);
+-      vec_u64_store(qcoeff1, off1, qcoeff_ptr);
++      store_tran_low(qcoeff1, off1, qcoeff_ptr);
+       dqcoeff1 = vec_mladd(qcoeff1, dequant, vec_zeros_s16);
+-      vec_u64_store(dqcoeff1, off1, dqcoeff_ptr);
++      store_tran_low(dqcoeff1, off1, dqcoeff_ptr);
+ 
+       qcoeff2 = vec_mulhi(vec_vaddshs(vec_abs(coeff2), round), quant);
+       zero_coeff2 = vec_cmpeq(qcoeff2, vec_zeros_s16);
+       qcoeff2 = vec_sign(qcoeff2, coeff2);
+-      vec_u64_store(qcoeff2, off2, qcoeff_ptr);
++      store_tran_low(qcoeff2, off2, qcoeff_ptr);
+       dqcoeff2 = vec_mladd(qcoeff2, dequant, vec_zeros_s16);
+-      vec_u64_store(dqcoeff2, off2, dqcoeff_ptr);
++      store_tran_low(dqcoeff2, off2, dqcoeff_ptr);
+ 
+       eob = vec_max(eob, vec_or(scan0, zero_coeff0));
+       eob2 = vec_max(vec_or(scan1, zero_coeff1), vec_or(scan2, zero_coeff2));
+@@ -204,8 +183,8 @@ void vp9_quantize_fp_32x32_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+   int16x8_t round = vec_vsx_ld(0, round_ptr);
+   int16x8_t quant = vec_vsx_ld(0, quant_ptr);
+   int16x8_t dequant = vec_vsx_ld(0, dequant_ptr);
+-  int16x8_t coeff0 = vec_vsx_ld(0, coeff_ptr);
+-  int16x8_t coeff1 = vec_vsx_ld(16, coeff_ptr);
++  int16x8_t coeff0 = load_tran_low(0, coeff_ptr);
++  int16x8_t coeff1 = load_tran_low(16, coeff_ptr);
+   int16x8_t scan0 = vec_vsx_ld(0, iscan);
+   int16x8_t scan1 = vec_vsx_ld(16, iscan);
+   int16x8_t thres = vec_sra(dequant, vec_splats((uint16_t)2));
+@@ -222,10 +201,10 @@ void vp9_quantize_fp_32x32_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+   qcoeff0 = vec_and(qcoeff0, mask0);
+   zero_coeff0 = vec_cmpeq(qcoeff0, vec_zeros_s16);
+   qcoeff0 = vec_sign(qcoeff0, coeff0);
+-  vec_u64_store(qcoeff0, 0, qcoeff_ptr);
++  store_tran_low(qcoeff0, 0, qcoeff_ptr);
+ 
+   dqcoeff0 = dequantize_coeff_32(qcoeff0, dequant);
+-  vec_u64_store(dqcoeff0, 0, dqcoeff_ptr);
++  store_tran_low(dqcoeff0, 0, dqcoeff_ptr);
+ 
+   // Remove DC value from thres, round, quant and dequant
+   thres = vec_splat(thres, 1);
+@@ -241,19 +220,19 @@ void vp9_quantize_fp_32x32_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+   qcoeff1 = vec_and(qcoeff1, mask1);
+   zero_coeff1 = vec_cmpeq(qcoeff1, vec_zeros_s16);
+   qcoeff1 = vec_sign(qcoeff1, coeff1);
+-  vec_u64_store(qcoeff1, 16, qcoeff_ptr);
++  store_tran_low(qcoeff1, 16, qcoeff_ptr);
+ 
+   dqcoeff1 = dequantize_coeff_32(qcoeff1, dequant);
+-  vec_u64_store(dqcoeff1, 16, dqcoeff_ptr);
++  store_tran_low(dqcoeff1, 16, dqcoeff_ptr);
+ 
+   eob = vec_max(vec_or(scan0, zero_coeff0), vec_or(scan1, zero_coeff1));
+ 
+   do {
+     int16x8_t coeff2, abs_coeff2, qcoeff2, dqcoeff2, eob2, scan2;
+     bool16x8_t zero_coeff2, mask2;
+-    coeff0 = vec_vsx_ld(off0, coeff_ptr);
+-    coeff1 = vec_vsx_ld(off1, coeff_ptr);
+-    coeff2 = vec_vsx_ld(off2, coeff_ptr);
++    coeff0 = load_tran_low(off0, coeff_ptr);
++    coeff1 = load_tran_low(off1, coeff_ptr);
++    coeff2 = load_tran_low(off2, coeff_ptr);
+     scan0 = vec_vsx_ld(off0, iscan);
+     scan1 = vec_vsx_ld(off1, iscan);
+     scan2 = vec_vsx_ld(off2, iscan);
+@@ -282,17 +261,17 @@ void vp9_quantize_fp_32x32_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+     qcoeff1 = vec_sign(qcoeff1, coeff1);
+     qcoeff2 = vec_sign(qcoeff2, coeff2);
+ 
+-    vec_u64_store(qcoeff0, off0, qcoeff_ptr);
+-    vec_u64_store(qcoeff1, off1, qcoeff_ptr);
+-    vec_u64_store(qcoeff2, off2, qcoeff_ptr);
++    store_tran_low(qcoeff0, off0, qcoeff_ptr);
++    store_tran_low(qcoeff1, off1, qcoeff_ptr);
++    store_tran_low(qcoeff2, off2, qcoeff_ptr);
+ 
+     dqcoeff0 = dequantize_coeff_32(qcoeff0, dequant);
+     dqcoeff1 = dequantize_coeff_32(qcoeff1, dequant);
+     dqcoeff2 = dequantize_coeff_32(qcoeff2, dequant);
+ 
+-    vec_u64_store(dqcoeff0, off0, dqcoeff_ptr);
+-    vec_u64_store(dqcoeff1, off1, dqcoeff_ptr);
+-    vec_u64_store(dqcoeff2, off2, dqcoeff_ptr);
++    store_tran_low(dqcoeff0, off0, dqcoeff_ptr);
++    store_tran_low(dqcoeff1, off1, dqcoeff_ptr);
++    store_tran_low(dqcoeff2, off2, dqcoeff_ptr);
+ 
+     eob = vec_max(eob, vec_or(scan0, zero_coeff0));
+     eob2 = vec_max(vec_or(scan1, zero_coeff1), vec_or(scan2, zero_coeff2));
+diff --git a/third_party/libvpx/source/libvpx/vpx_dsp/ppc/fdct32x32_vsx.c b/third_party/libvpx/source/libvpx/vpx_dsp/ppc/fdct32x32_vsx.c
+index f28664d7e1..b60d2fbb82 100644
+--- a/third_party/libvpx/source/libvpx/vpx_dsp/ppc/fdct32x32_vsx.c
++++ b/third_party/libvpx/source/libvpx/vpx_dsp/ppc/fdct32x32_vsx.c
+@@ -14,28 +14,7 @@
+ #include "vpx_dsp/ppc/transpose_vsx.h"
+ #include "vpx_dsp/ppc/txfm_common_vsx.h"
+ #include "vpx_dsp/ppc/types_vsx.h"
+-
+-static INLINE void
+-vec_u64_store(vector unsigned long long vecu64, unsigned long offset, void *ptr)
+-{
+-#ifndef WORDS_BIGENDIAN
+-  __asm__ ("xxswapd %x0, %x1"
+-	   : "=wa" (vecu64)
+-	   : "wa" (vecu64));
+-#endif
+-#if __GNUC__ >= 4
+-  if (__builtin_constant_p (offset) && offset == 0)
+-    __asm__ ("stxvd2x %x0,0,%1\n\t"
+-	     :
+-	     : "wa" (vecu64), "r" ((uintptr_t)ptr)
+-	     : "memory");
+-  else
+-#endif
+-    __asm__ ("stxvd2x %x0,%1,%2\n\t"
+-	     :
+-	     : "wa" (vecu64), "r" (offset), "r" ((uintptr_t)ptr)
+-	     : "memory", "r0");
+-}
++#include "vpx_dsp/ppc/bitdepth_conversion_vsx.h"
+ 
+ // Returns ((a +/- b) * cospi16 + (2 << 13)) >> 14.
+ static INLINE void single_butterfly(int16x8_t a, int16x8_t b, int16x8_t *add,
+@@ -186,45 +165,45 @@ static INLINE void load(const int16_t *a, int stride, int16x8_t *b) {
+ }
+ 
+ static INLINE void store(tran_low_t *a, const int16x8_t *b) {
+-  vec_u64_store(b[0], 0, a);
+-  vec_u64_store(b[8], 0, a + 8);
+-  vec_u64_store(b[16], 0, a + 16);
+-  vec_u64_store(b[24], 0, a + 24);
+-
+-  vec_u64_store(b[1], 0, a + 32);
+-  vec_u64_store(b[9], 0, a + 40);
+-  vec_u64_store(b[17], 0, a + 48);
+-  vec_u64_store(b[25], 0, a + 56);
+-
+-  vec_u64_store(b[2], 0, a + 64);
+-  vec_u64_store(b[10], 0, a + 72);
+-  vec_u64_store(b[18], 0, a + 80);
+-  vec_u64_store(b[26], 0, a + 88);
+-
+-  vec_u64_store(b[3], 0, a + 96);
+-  vec_u64_store(b[11], 0, a + 104);
+-  vec_u64_store(b[19], 0, a + 112);
+-  vec_u64_store(b[27], 0, a + 120);
+-
+-  vec_u64_store(b[4], 0, a + 128);
+-  vec_u64_store(b[12], 0, a + 136);
+-  vec_u64_store(b[20], 0, a + 144);
+-  vec_u64_store(b[28], 0, a + 152);
+-
+-  vec_u64_store(b[5], 0, a + 160);
+-  vec_u64_store(b[13], 0, a + 168);
+-  vec_u64_store(b[21], 0, a + 176);
+-  vec_u64_store(b[29], 0, a + 184);
+-
+-  vec_u64_store(b[6], 0, a + 192);
+-  vec_u64_store(b[14], 0, a + 200);
+-  vec_u64_store(b[22], 0, a + 208);
+-  vec_u64_store(b[30], 0, a + 216);
+-
+-  vec_u64_store(b[7], 0, a + 224);
+-  vec_u64_store(b[15], 0, a + 232);
+-  vec_u64_store(b[23], 0, a + 240);
+-  vec_u64_store(b[31], 0, a + 248);
++  store_tran_low(b[0], 0, a);
++  store_tran_low(b[8], 0, a + 8);
++  store_tran_low(b[16], 0, a + 16);
++  store_tran_low(b[24], 0, a + 24);
++
++  store_tran_low(b[1], 0, a + 32);
++  store_tran_low(b[9], 0, a + 40);
++  store_tran_low(b[17], 0, a + 48);
++  store_tran_low(b[25], 0, a + 56);
++
++  store_tran_low(b[2], 0, a + 64);
++  store_tran_low(b[10], 0, a + 72);
++  store_tran_low(b[18], 0, a + 80);
++  store_tran_low(b[26], 0, a + 88);
++
++  store_tran_low(b[3], 0, a + 96);
++  store_tran_low(b[11], 0, a + 104);
++  store_tran_low(b[19], 0, a + 112);
++  store_tran_low(b[27], 0, a + 120);
++
++  store_tran_low(b[4], 0, a + 128);
++  store_tran_low(b[12], 0, a + 136);
++  store_tran_low(b[20], 0, a + 144);
++  store_tran_low(b[28], 0, a + 152);
++
++  store_tran_low(b[5], 0, a + 160);
++  store_tran_low(b[13], 0, a + 168);
++  store_tran_low(b[21], 0, a + 176);
++  store_tran_low(b[29], 0, a + 184);
++
++  store_tran_low(b[6], 0, a + 192);
++  store_tran_low(b[14], 0, a + 200);
++  store_tran_low(b[22], 0, a + 208);
++  store_tran_low(b[30], 0, a + 216);
++
++  store_tran_low(b[7], 0, a + 224);
++  store_tran_low(b[15], 0, a + 232);
++  store_tran_low(b[23], 0, a + 240);
++  store_tran_low(b[31], 0, a + 248);
+ }
+ 
+ // Returns 1 if negative 0 if positive
+diff --git a/third_party/libvpx/source/libvpx/vpx_dsp/ppc/quantize_vsx.c b/third_party/libvpx/source/libvpx/vpx_dsp/ppc/quantize_vsx.c
+index 3e9cff6146..96ef40aa95 100644
+--- a/third_party/libvpx/source/libvpx/vpx_dsp/ppc/quantize_vsx.c
++++ b/third_party/libvpx/source/libvpx/vpx_dsp/ppc/quantize_vsx.c
+@@ -12,28 +12,7 @@
+ 
+ #include "./vpx_dsp_rtcd.h"
+ #include "vpx_dsp/ppc/types_vsx.h"
+-
+-static INLINE void
+-vec_u64_store(vector unsigned long long vecu64, unsigned long offset, void *ptr)
+-{
+-#ifndef WORDS_BIGENDIAN
+-  __asm__ ("xxswapd %x0, %x1"
+-	   : "=wa" (vecu64)
+-	   : "wa" (vecu64));
+-#endif
+-#if __GNUC__ >= 4
+-  if (__builtin_constant_p (offset) && offset == 0)
+-    __asm__ ("stxvd2x %x0,0,%1\n\t"
+-	     :
+-	     : "wa" (vecu64), "r" ((uintptr_t)ptr)
+-	     : "memory");
+-  else
+-#endif
+-    __asm__ ("stxvd2x %x0,%1,%2\n\t"
+-	     :
+-	     : "wa" (vecu64), "r" (offset), "r" ((uintptr_t)ptr)
+-	     : "memory", "r0");
+-}
++#include "vpx_dsp/ppc/bitdepth_conversion_vsx.h"
+ 
+ // Negate 16-bit integers in a when the corresponding signed 16-bit
+ // integer in b is negative.
+@@ -132,8 +111,8 @@ void vpx_quantize_b_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+   int16x8_t dequant = vec_vsx_ld(0, dequant_ptr);
+   int16x8_t quant_shift = vec_vsx_ld(0, quant_shift_ptr);
+ 
+-  int16x8_t coeff0 = vec_vsx_ld(0, coeff_ptr);
+-  int16x8_t coeff1 = vec_vsx_ld(16, coeff_ptr);
++  int16x8_t coeff0 = load_tran_low(0, coeff_ptr);
++  int16x8_t coeff1 = load_tran_low(16, coeff_ptr);
+ 
+   int16x8_t coeff0_abs = vec_abs(coeff0);
+   int16x8_t coeff1_abs = vec_abs(coeff1);
+@@ -146,19 +125,19 @@ void vpx_quantize_b_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+ 
+   qcoeff0 =
+       quantize_coeff(coeff0, coeff0_abs, round, quant, quant_shift, zero_mask0);
+-  vec_u64_store(qcoeff0, 0, qcoeff_ptr);
++  store_tran_low(qcoeff0, 0, qcoeff_ptr);
+   round = vec_splat(round, 1);
+   quant = vec_splat(quant, 1);
+   quant_shift = vec_splat(quant_shift, 1);
+   qcoeff1 =
+       quantize_coeff(coeff1, coeff1_abs, round, quant, quant_shift, zero_mask1);
+-  vec_u64_store(qcoeff1, 16, qcoeff_ptr);
++  store_tran_low(qcoeff1, 16, qcoeff_ptr);
+ 
+   dqcoeff0 = vec_mladd(qcoeff0, dequant, vec_zeros_s16);
+-  vec_u64_store(dqcoeff0, 0, dqcoeff_ptr);
++  store_tran_low(dqcoeff0, 0, dqcoeff_ptr);
+   dequant = vec_splat(dequant, 1);
+   dqcoeff1 = vec_mladd(qcoeff1, dequant, vec_zeros_s16);
+-  vec_u64_store(dqcoeff1, 16, dqcoeff_ptr);
++  store_tran_low(dqcoeff1, 16, dqcoeff_ptr);
+ 
+   eob = vec_max(nonzero_scanindex(qcoeff0, iscan_ptr, 0),
+                 nonzero_scanindex(qcoeff1, iscan_ptr, 16));
+@@ -171,9 +150,9 @@ void vpx_quantize_b_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+     do {
+       int16x8_t coeff2, coeff2_abs, qcoeff2, dqcoeff2, eob2;
+       bool16x8_t zero_mask2;
+-      coeff0 = vec_vsx_ld(off0, coeff_ptr);
+-      coeff1 = vec_vsx_ld(off1, coeff_ptr);
+-      coeff2 = vec_vsx_ld(off2, coeff_ptr);
++      coeff0 = load_tran_low(off0, coeff_ptr);
++      coeff1 = load_tran_low(off1, coeff_ptr);
++      coeff2 = load_tran_low(off2, coeff_ptr);
+       coeff0_abs = vec_abs(coeff0);
+       coeff1_abs = vec_abs(coeff1);
+       coeff2_abs = vec_abs(coeff2);
+@@ -186,17 +165,17 @@ void vpx_quantize_b_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+                                zero_mask1);
+       qcoeff2 = quantize_coeff(coeff2, coeff2_abs, round, quant, quant_shift,
+                                zero_mask2);
+-      vec_u64_store(qcoeff0, off0, qcoeff_ptr);
+-      vec_u64_store(qcoeff1, off1, qcoeff_ptr);
+-      vec_u64_store(qcoeff2, off2, qcoeff_ptr);
++      store_tran_low(qcoeff0, off0, qcoeff_ptr);
++      store_tran_low(qcoeff1, off1, qcoeff_ptr);
++      store_tran_low(qcoeff2, off2, qcoeff_ptr);
+ 
+       dqcoeff0 = vec_mladd(qcoeff0, dequant, vec_zeros_s16);
+       dqcoeff1 = vec_mladd(qcoeff1, dequant, vec_zeros_s16);
+       dqcoeff2 = vec_mladd(qcoeff2, dequant, vec_zeros_s16);
+ 
+-      vec_u64_store(dqcoeff0, off0, dqcoeff_ptr);
+-      vec_u64_store(dqcoeff1, off1, dqcoeff_ptr);
+-      vec_u64_store(dqcoeff2, off2, dqcoeff_ptr);
++      store_tran_low(dqcoeff0, off0, dqcoeff_ptr);
++      store_tran_low(dqcoeff1, off1, dqcoeff_ptr);
++      store_tran_low(dqcoeff2, off2, dqcoeff_ptr);
+ 
+       eob = vec_max(eob, nonzero_scanindex(qcoeff0, iscan_ptr, off0));
+       eob2 = vec_max(nonzero_scanindex(qcoeff1, iscan_ptr, off1),
+@@ -240,8 +219,8 @@ void vpx_quantize_b_32x32_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+   int16x8_t dequant = vec_vsx_ld(0, dequant_ptr);
+   int16x8_t quant_shift = vec_vsx_ld(0, quant_shift_ptr);
+ 
+-  int16x8_t coeff0 = vec_vsx_ld(0, coeff_ptr);
+-  int16x8_t coeff1 = vec_vsx_ld(16, coeff_ptr);
++  int16x8_t coeff0 = load_tran_low(0, coeff_ptr);
++  int16x8_t coeff1 = load_tran_low(16, coeff_ptr);
+ 
+   int16x8_t coeff0_abs = vec_abs(coeff0);
+   int16x8_t coeff1_abs = vec_abs(coeff1);
+@@ -265,12 +244,12 @@ void vpx_quantize_b_32x32_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+   qcoeff1 = quantize_coeff_32(coeff1, coeff1_abs, round, quant, quant_shift,
+                               zero_mask1);
+ 
+-  vec_u64_store(qcoeff0, 0, qcoeff_ptr);
+-  vec_u64_store(qcoeff1, 16, qcoeff_ptr);
++  store_tran_low(qcoeff0, 0, qcoeff_ptr);
++  store_tran_low(qcoeff1, 16, qcoeff_ptr);
+ 
+-  vec_u64_store(dequantize_coeff_32(qcoeff0, dequant), 0, dqcoeff_ptr);
++  store_tran_low(dequantize_coeff_32(qcoeff0, dequant), 0, dqcoeff_ptr);
+   dequant = vec_splat(dequant, 1);  // remove DC from dequant
+-  vec_u64_store(dequantize_coeff_32(qcoeff1, dequant), 16, dqcoeff_ptr);
++  store_tran_low(dequantize_coeff_32(qcoeff1, dequant), 16, dqcoeff_ptr);
+ 
+   eob = vec_max(nonzero_scanindex(qcoeff0, iscan_ptr, 0),
+                 nonzero_scanindex(qcoeff1, iscan_ptr, 16));
+@@ -279,9 +258,9 @@ void vpx_quantize_b_32x32_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+     int16x8_t coeff2, coeff2_abs, qcoeff2, eob2;
+     bool16x8_t zero_mask2;
+ 
+-    coeff0 = vec_vsx_ld(off0, coeff_ptr);
+-    coeff1 = vec_vsx_ld(off1, coeff_ptr);
+-    coeff2 = vec_vsx_ld(off2, coeff_ptr);
++    coeff0 = load_tran_low(off0, coeff_ptr);
++    coeff1 = load_tran_low(off1, coeff_ptr);
++    coeff2 = load_tran_low(off2, coeff_ptr);
+ 
+     coeff0_abs = vec_abs(coeff0);
+     coeff1_abs = vec_abs(coeff1);
+@@ -298,13 +277,13 @@ void vpx_quantize_b_32x32_vsx(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+     qcoeff2 = quantize_coeff_32(coeff2, coeff2_abs, round, quant, quant_shift,
+                                 zero_mask2);
+ 
+-    vec_u64_store(qcoeff0, off0, qcoeff_ptr);
+-    vec_u64_store(qcoeff1, off1, qcoeff_ptr);
+-    vec_u64_store(qcoeff2, off2, qcoeff_ptr);
++    store_tran_low(qcoeff0, off0, qcoeff_ptr);
++    store_tran_low(qcoeff1, off1, qcoeff_ptr);
++    store_tran_low(qcoeff2, off2, qcoeff_ptr);
+ 
+-    vec_u64_store(dequantize_coeff_32(qcoeff0, dequant), off0, dqcoeff_ptr);
+-    vec_u64_store(dequantize_coeff_32(qcoeff1, dequant), off1, dqcoeff_ptr);
+-    vec_u64_store(dequantize_coeff_32(qcoeff2, dequant), off2, dqcoeff_ptr);
++    store_tran_low(dequantize_coeff_32(qcoeff0, dequant), off0, dqcoeff_ptr);
++    store_tran_low(dequantize_coeff_32(qcoeff1, dequant), off1, dqcoeff_ptr);
++    store_tran_low(dequantize_coeff_32(qcoeff2, dequant), off2, dqcoeff_ptr);
+ 
+     eob = vec_max(eob, nonzero_scanindex(qcoeff0, iscan_ptr, off0));
+     eob2 = vec_max(nonzero_scanindex(qcoeff1, iscan_ptr, off1),
+-- 
+2.39.3
+

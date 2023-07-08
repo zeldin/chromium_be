@@ -1,0 +1,52 @@
+From c15b739391975ac27eb8ec027d9e424ee275035d Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 5 Jul 2023 10:57:20 +0200
+Subject: [PATCH 1/2] minidump: Set correct cpu architecture for PPC64
+
+---
+ .../crashpad/crashpad/minidump/minidump_system_info_writer.cc  | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/third_party/crashpad/crashpad/minidump/minidump_system_info_writer.cc b/third_party/crashpad/crashpad/minidump/minidump_system_info_writer.cc
+index 4468c41aff..d9ce14903e 100644
+--- a/third_party/crashpad/crashpad/minidump/minidump_system_info_writer.cc
++++ b/third_party/crashpad/crashpad/minidump/minidump_system_info_writer.cc
+@@ -132,6 +132,9 @@ void MinidumpSystemInfoWriter::InitializeFromSnapshot(
+     case kCPUArchitectureARM64:
+       cpu_architecture = kMinidumpCPUArchitectureARM64;
+       break;
++    case kCPUArchitecturePPC64:
++      cpu_architecture = kMinidumpCPUArchitecturePPC64;
++      break;
+     default:
+       NOTREACHED();
+       cpu_architecture = kMinidumpCPUArchitectureUnknown;
+-- 
+2.39.3
+
+
+From 233933764f7c42ddd07c73de53c56fe8eb4fbea3 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 5 Jul 2023 13:40:41 +0200
+Subject: [PATCH 2/2] r_debug does not contain 64-bit ints
+
+---
+ .../crashpad/crashpad/snapshot/linux/debug_rendezvous.cc        | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/crashpad/crashpad/snapshot/linux/debug_rendezvous.cc b/third_party/crashpad/crashpad/snapshot/linux/debug_rendezvous.cc
+index 5a03bbd859..139a2f83b1 100644
+--- a/third_party/crashpad/crashpad/snapshot/linux/debug_rendezvous.cc
++++ b/third_party/crashpad/crashpad/snapshot/linux/debug_rendezvous.cc
+@@ -35,7 +35,7 @@ struct Traits32 {
+ };
+ 
+ struct Traits64 {
+-  using Integer = int64_t;
++  using Integer = int32_t;
+   using Address = uint64_t;
+ };
+ 
+-- 
+2.39.3
+

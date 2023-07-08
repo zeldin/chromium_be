@@ -1,0 +1,1187 @@
+From 870ee9bc754ef976d0df94469477240504bfefc2 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:22:53 +0100
+Subject: [PATCH 01/17] Only activate ppc64le sources on LE
+
+---
+ third_party/boringssl/BUILD.gn | 11 +++--------
+ 1 file changed, 3 insertions(+), 8 deletions(-)
+
+diff --git a/third_party/boringssl/BUILD.gn b/third_party/boringssl/BUILD.gn
+index b2d9ead59f..d8aae49a88 100644
+--- a/third_party/boringssl/BUILD.gn
++++ b/third_party/boringssl/BUILD.gn
+@@ -5,6 +5,7 @@
+ import("//build/config/android/config.gni")
+ import("//build/config/arm.gni")
+ import("//build/config/compiler/compiler.gni")
++import("//build/config/host_byteorder.gni")
+ import("//build/config/sanitizers/sanitizers.gni")
+ import("//build_overrides/build.gni")
+ import("//testing/libfuzzer/fuzzer_test.gni")
+@@ -148,20 +149,14 @@ if (is_win && !is_msan && current_cpu != "arm64") {
+       } else {
+         public_configs = [ ":no_asm_config" ]
+       }
+-    } else if (current_cpu == "ppc64") {
++    } else if (current_cpu == "ppc64" && host_byteorder == "little") {
+       if (is_linux) {
+-        # TODO: ppc64 (be) check
+         sources += crypto_sources_linux_ppc64le
+       } else {
+         public_configs = [ ":no_asm_config" ]
+       }
+     } else if (current_cpu == "ppc64") {
+-      if (is_linux) {
+-        # TODO: ppc64 (be) check
+-        sources += crypto_sources_linux_ppc64le
+-      } else {
+-        public_configs = [ ":no_asm_config" ]
+-      }
++      public_configs = [ ":no_asm_config" ]
+     } else {
+       public_configs = [ ":no_asm_config" ]
+     }
+-- 
+2.39.3
+
+
+From 3be97705c263643678f5951d35ce66a50dea75bf Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Mon, 24 Sep 2018 18:18:42 +0200
+Subject: [PATCH 02/17] Add ppc64 big endian to base.h
+
+---
+ third_party/boringssl/src/include/openssl/base.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/third_party/boringssl/src/include/openssl/base.h b/third_party/boringssl/src/include/openssl/base.h
+index ddbcb99754..98c9daa15e 100644
+--- a/third_party/boringssl/src/include/openssl/base.h
++++ b/third_party/boringssl/src/include/openssl/base.h
+@@ -99,6 +99,9 @@ extern "C" {
+ #elif (defined(__PPC64__) || defined(__powerpc64__)) && defined(_LITTLE_ENDIAN)
+ #define OPENSSL_64_BIT
+ #define OPENSSL_PPC64LE
++#elif (defined(__PPC64__) || defined(__powerpc64__))
++#define OPENSSL_64_BIT
++#define OPENSSL_PPC64
+ #elif defined(__MIPSEL__) && !defined(__LP64__)
+ #define OPENSSL_32_BIT
+ #define OPENSSL_MIPS
+-- 
+2.39.3
+
+
+From 68cb40e5402451bc7940fc38d836a55532414e5a Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 2 Jul 2023 15:38:21 +0200
+Subject: [PATCH 03/17] Fix CRYPTO_{load,store}* on big endian
+
+---
+ third_party/boringssl/src/crypto/internal.h   | 49 +++++++++++++++++++
+ .../boringssl/src/include/openssl/base.h      |  1 +
+ 2 files changed, 50 insertions(+)
+
+diff --git a/third_party/boringssl/src/crypto/internal.h b/third_party/boringssl/src/crypto/internal.h
+index 6893d2094b..d593925400 100644
+--- a/third_party/boringssl/src/crypto/internal.h
++++ b/third_party/boringssl/src/crypto/internal.h
+@@ -901,58 +901,106 @@ static inline void *OPENSSL_memset(void *dst, int c, size_t n) {
+ static inline uint32_t CRYPTO_load_u32_le(const void *in) {
+   uint32_t v;
+   OPENSSL_memcpy(&v, in, sizeof(v));
++#ifdef OPENSSL_BIGENDIAN
++  return CRYPTO_bswap4(v);
++#else
+   return v;
++#endif
+ }
+ 
+ static inline void CRYPTO_store_u32_le(void *out, uint32_t v) {
++#ifdef OPENSSL_BIGENDIAN
++  v = CRYPTO_bswap4(v);
++#endif
+   OPENSSL_memcpy(out, &v, sizeof(v));
+ }
+ 
+ static inline uint32_t CRYPTO_load_u32_be(const void *in) {
+   uint32_t v;
+   OPENSSL_memcpy(&v, in, sizeof(v));
++#ifdef OPENSSL_BIGENDIAN
++  return v;
++#else
+   return CRYPTO_bswap4(v);
++#endif
+ }
+ 
+ static inline void CRYPTO_store_u32_be(void *out, uint32_t v) {
++#ifndef OPENSSL_BIGENDIAN
+   v = CRYPTO_bswap4(v);
++#endif
+   OPENSSL_memcpy(out, &v, sizeof(v));
+ }
+ 
+ static inline uint64_t CRYPTO_load_u64_le(const void *in) {
+   uint64_t v;
+   OPENSSL_memcpy(&v, in, sizeof(v));
++#ifdef OPENSSL_BIGENDIAN
++  return CRYPTO_bswap8(v);
++#else
+   return v;
++#endif
+ }
+ 
+ static inline void CRYPTO_store_u64_le(void *out, uint64_t v) {
++#ifdef OPENSSL_BIGENDIAN
++  v = CRYPTO_bswap8(v);
++#endif
+   OPENSSL_memcpy(out, &v, sizeof(v));
+ }
+ 
+ static inline uint64_t CRYPTO_load_u64_be(const void *ptr) {
+   uint64_t ret;
+   OPENSSL_memcpy(&ret, ptr, sizeof(ret));
++#ifdef OPENSSL_BIGENDIAN
++  return ret;
++#else
+   return CRYPTO_bswap8(ret);
++#endif
+ }
+ 
+ static inline void CRYPTO_store_u64_be(void *out, uint64_t v) {
++#ifndef OPENSSL_BIGENDIAN
+   v = CRYPTO_bswap8(v);
++#endif
+   OPENSSL_memcpy(out, &v, sizeof(v));
+ }
+ 
+ static inline crypto_word_t CRYPTO_load_word_le(const void *in) {
+   crypto_word_t v;
+   OPENSSL_memcpy(&v, in, sizeof(v));
++#ifdef OPENSSL_BIGENDIAN
++#if defined(OPENSSL_64_BIT)
++  static_assert(sizeof(v) == 8, "crypto_word_t has unexpected size");
++  return CRYPTO_bswap8(v);
++#else
++  static_assert(sizeof(v) == 4, "crypto_word_t has unexpected size");
++  return CRYPTO_bswap4(v);
++#endif
++#else
+   return v;
++#endif
+ }
+ 
+ static inline void CRYPTO_store_word_le(void *out, crypto_word_t v) {
++#ifdef OPENSSL_BIGENDIAN
++#if defined(OPENSSL_64_BIT)
++  static_assert(sizeof(v) == 8, "crypto_word_t has unexpected size");
++  v = CRYPTO_bswap8(v);
++#else
++  static_assert(sizeof(v) == 4, "crypto_word_t has unexpected size");
++  v = CRYPTO_bswap4(v);
++#endif
++#endif
+   OPENSSL_memcpy(out, &v, sizeof(v));
+ }
+ 
+ static inline crypto_word_t CRYPTO_load_word_be(const void *in) {
+   crypto_word_t v;
+   OPENSSL_memcpy(&v, in, sizeof(v));
++#ifdef OPENSSL_BIGENDIAN
++  return v;
++#else
+ #if defined(OPENSSL_64_BIT)
+   static_assert(sizeof(v) == 8, "crypto_word_t has unexpected size");
+   return CRYPTO_bswap8(v);
+@@ -960,6 +1008,7 @@ static inline crypto_word_t CRYPTO_load_word_be(const void *in) {
+   static_assert(sizeof(v) == 4, "crypto_word_t has unexpected size");
+   return CRYPTO_bswap4(v);
+ #endif
++#endif
+ }
+ 
+ 
+diff --git a/third_party/boringssl/src/include/openssl/base.h b/third_party/boringssl/src/include/openssl/base.h
+index 98c9daa15e..3668f0e495 100644
+--- a/third_party/boringssl/src/include/openssl/base.h
++++ b/third_party/boringssl/src/include/openssl/base.h
+@@ -102,6 +102,7 @@ extern "C" {
+ #elif (defined(__PPC64__) || defined(__powerpc64__))
+ #define OPENSSL_64_BIT
+ #define OPENSSL_PPC64
++#define OPENSSL_BIGENDIAN
+ #elif defined(__MIPSEL__) && !defined(__LP64__)
+ #define OPENSSL_32_BIT
+ #define OPENSSL_MIPS
+-- 
+2.39.3
+
+
+From 839260f631dfb4bd959308d244643b5bba11a707 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 2 Oct 2018 23:32:02 +0200
+Subject: [PATCH 04/17] bn: Fix I/O on big endian
+
+---
+ .../src/crypto/fipsmodule/bn/bytes.c          | 31 +++++++++++++++----
+ 1 file changed, 25 insertions(+), 6 deletions(-)
+
+diff --git a/third_party/boringssl/src/crypto/fipsmodule/bn/bytes.c b/third_party/boringssl/src/crypto/fipsmodule/bn/bytes.c
+index 331e085962..7b48082c95 100644
+--- a/third_party/boringssl/src/crypto/fipsmodule/bn/bytes.c
++++ b/third_party/boringssl/src/crypto/fipsmodule/bn/bytes.c
+@@ -143,9 +143,13 @@ BIGNUM *BN_le2bn(const uint8_t *in, size_t len, BIGNUM *ret) {
+   // Make sure the top bytes will be zeroed.
+   ret->d[num_words - 1] = 0;
+ 
+-  // We only support little-endian platforms, so we can simply memcpy the
+-  // internal representation.
++#ifdef OPENSSL_BIGENDIAN
++  uint8_t *out = (uint8_t *)ret->d;
++  for (size_t i = 0; i < len; i++)
++    out[i ^ (BN_BYTES-1)] = in[i];
++#else
+   OPENSSL_memcpy(ret->d, in, len);
++#endif
+   return ret;
+ }
+ 
+@@ -157,7 +161,11 @@ static int fits_in_bytes(const BN_ULONG *words, size_t num_words,
+   size_t tot_bytes = num_words * sizeof(BN_ULONG);
+   uint8_t mask = 0;
+   for (size_t i = num_bytes; i < tot_bytes; i++) {
++#ifdef OPENSSL_BIGENDIAN
++    mask |= bytes[i ^ (BN_BYTES-1)];
++#else
+     mask |= bytes[i];
++#endif
+   }
+   return mask == 0;
+ }
+@@ -168,7 +176,11 @@ void bn_assert_fits_in_bytes(const BIGNUM *bn, size_t num) {
+   if (tot_bytes > num) {
+     CONSTTIME_DECLASSIFY(bytes + num, tot_bytes - num);
+     for (size_t i = num; i < tot_bytes; i++) {
++#ifdef OPENSSL_BIGENDIAN
++      assert(bytes[i ^ (BN_BYTES-1)] == 0);
++#else
+       assert(bytes[i] == 0);
++#endif
+     }
+     (void)bytes;
+   }
+@@ -179,17 +191,21 @@ void bn_words_to_big_endian(uint8_t *out, size_t out_len, const BN_ULONG *in,
+   // The caller should have selected an output length without truncation.
+   assert(fits_in_bytes(in, in_len, out_len));
+ 
+-  // We only support little-endian platforms, so the internal representation is
+-  // also little-endian as bytes. We can simply copy it in reverse.
+   const uint8_t *bytes = (const uint8_t *)in;
+   size_t num_bytes = in_len * sizeof(BN_ULONG);
+   if (out_len < num_bytes) {
+     num_bytes = out_len;
+   }
+ 
++#ifdef OPENSSL_BIGENDIAN
++  for (size_t i = 0; i < num_bytes; i++) {
++    out[out_len - i - 1] = bytes[i ^ (BN_BYTES-1)];
++  }
++#else
+   for (size_t i = 0; i < num_bytes; i++) {
+     out[out_len - i - 1] = bytes[i];
+   }
++#endif
+   // Pad out the rest of the buffer with zeroes.
+   OPENSSL_memset(out, 0, out_len - num_bytes);
+ }
+@@ -205,15 +221,18 @@ int BN_bn2le_padded(uint8_t *out, size_t len, const BIGNUM *in) {
+     return 0;
+   }
+ 
+-  // We only support little-endian platforms, so we can simply memcpy into the
+-  // internal representation.
+   const uint8_t *bytes = (const uint8_t *)in->d;
+   size_t num_bytes = in->width * BN_BYTES;
+   if (len < num_bytes) {
+     num_bytes = len;
+   }
+ 
++#ifdef OPENSSL_BIGENDIAN
++  for (size_t i = 0; i < num_bytes; i++)
++    out[i ^ (BN_BYTES-1)] = bytes[i];
++#else
+   OPENSSL_memcpy(out, bytes, num_bytes);
++#endif
+   // Pad out the rest of the buffer with zeroes.
+   OPENSSL_memset(out + num_bytes, 0, len - num_bytes);
+   return 1;
+-- 
+2.39.3
+
+
+From 0b3c68953df87933dd80d4c03d79d15c6b509cbd Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 16 Feb 2019 14:56:15 +0100
+Subject: [PATCH 05/17] fipsmodule: Remove unneeded swaps on big endian
+
+---
+ .../src/crypto/fipsmodule/modes/gcm.c         | 50 +++++++++++--------
+ 1 file changed, 29 insertions(+), 21 deletions(-)
+
+diff --git a/third_party/boringssl/src/crypto/fipsmodule/modes/gcm.c b/third_party/boringssl/src/crypto/fipsmodule/modes/gcm.c
+index 11a0b203ef..6a38b66aaa 100644
+--- a/third_party/boringssl/src/crypto/fipsmodule/modes/gcm.c
++++ b/third_party/boringssl/src/crypto/fipsmodule/modes/gcm.c
+@@ -57,6 +57,14 @@
+ #include "../../internal.h"
+ 
+ 
++#ifdef OPENSSL_BIGENDIAN
++#define GCM_bswap4(x) (x)
++#define GCM_bswap8(x) (x)
++#else
++#define GCM_bswap4 CRYPTO_bswap4
++#define GCM_bswap8 CRYPTO_bswap8
++#endif
++
+ // kSizeTWithoutLower4Bits is a mask that can be used to zero the lower four
+ // bits of a |size_t|.
+ static const size_t kSizeTWithoutLower4Bits = (size_t) -16;
+@@ -304,15 +312,15 @@ void CRYPTO_gcm128_setiv(GCM128_CONTEXT *ctx, const AES_KEY *key,
+       GCM_MUL(ctx, Yi);
+     }
+     len0 <<= 3;
+-    ctx->Yi.u[1] ^= CRYPTO_bswap8(len0);
++    ctx->Yi.u[1] ^= GCM_bswap8(len0);
+ 
+     GCM_MUL(ctx, Yi);
+-    ctr = CRYPTO_bswap4(ctx->Yi.d[3]);
++    ctr = GCM_bswap4(ctx->Yi.d[3]);
+   }
+ 
+   (*ctx->gcm_key.block)(ctx->Yi.c, ctx->EK0.c, key);
+   ++ctr;
+-  ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++  ctx->Yi.d[3] = GCM_bswap4(ctr);
+ }
+ 
+ int CRYPTO_gcm128_aad(GCM128_CONTEXT *ctx, const uint8_t *aad, size_t len) {
+@@ -406,14 +414,14 @@ int CRYPTO_gcm128_encrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+     }
+   }
+ 
+-  uint32_t ctr = CRYPTO_bswap4(ctx->Yi.d[3]);
++  uint32_t ctr = GCM_bswap4(ctx->Yi.d[3]);
+   while (len >= GHASH_CHUNK) {
+     size_t j = GHASH_CHUNK;
+ 
+     while (j) {
+       (*block)(ctx->Yi.c, ctx->EKi.c, key);
+       ++ctr;
+-      ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++      ctx->Yi.d[3] = GCM_bswap4(ctr);
+       for (size_t i = 0; i < 16; i += sizeof(crypto_word_t)) {
+         CRYPTO_store_word_le(out + i,
+                              CRYPTO_load_word_le(in + i) ^
+@@ -431,7 +439,7 @@ int CRYPTO_gcm128_encrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+     while (len >= 16) {
+       (*block)(ctx->Yi.c, ctx->EKi.c, key);
+       ++ctr;
+-      ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++      ctx->Yi.d[3] = GCM_bswap4(ctr);
+       for (size_t i = 0; i < 16; i += sizeof(crypto_word_t)) {
+         CRYPTO_store_word_le(out + i,
+                              CRYPTO_load_word_le(in + i) ^
+@@ -446,7 +454,7 @@ int CRYPTO_gcm128_encrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+   if (len) {
+     (*block)(ctx->Yi.c, ctx->EKi.c, key);
+     ++ctr;
+-    ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++    ctx->Yi.d[3] = GCM_bswap4(ctr);
+     while (len--) {
+       ctx->Xi.c[n] ^= out[n] = in[n] ^ ctx->EKi.c[n];
+       ++n;
+@@ -498,7 +506,7 @@ int CRYPTO_gcm128_decrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+     }
+   }
+ 
+-  uint32_t ctr = CRYPTO_bswap4(ctx->Yi.d[3]);
++  uint32_t ctr = GCM_bswap4(ctx->Yi.d[3]);
+   while (len >= GHASH_CHUNK) {
+     size_t j = GHASH_CHUNK;
+ 
+@@ -506,7 +514,7 @@ int CRYPTO_gcm128_decrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+     while (j) {
+       (*block)(ctx->Yi.c, ctx->EKi.c, key);
+       ++ctr;
+-      ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++      ctx->Yi.d[3] = GCM_bswap4(ctr);
+       for (size_t i = 0; i < 16; i += sizeof(crypto_word_t)) {
+         CRYPTO_store_word_le(out + i,
+                              CRYPTO_load_word_le(in + i) ^
+@@ -524,7 +532,7 @@ int CRYPTO_gcm128_decrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+     while (len >= 16) {
+       (*block)(ctx->Yi.c, ctx->EKi.c, key);
+       ++ctr;
+-      ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++      ctx->Yi.d[3] = GCM_bswap4(ctr);
+       for (size_t i = 0; i < 16; i += sizeof(crypto_word_t)) {
+         CRYPTO_store_word_le(out + i,
+                              CRYPTO_load_word_le(in + i) ^
+@@ -538,7 +546,7 @@ int CRYPTO_gcm128_decrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+   if (len) {
+     (*block)(ctx->Yi.c, ctx->EKi.c, key);
+     ++ctr;
+-    ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++    ctx->Yi.d[3] = GCM_bswap4(ctr);
+     while (len--) {
+       uint8_t c = in[n];
+       ctx->Xi.c[n] ^= c;
+@@ -601,11 +609,11 @@ int CRYPTO_gcm128_encrypt_ctr32(GCM128_CONTEXT *ctx, const AES_KEY *key,
+   }
+ #endif
+ 
+-  uint32_t ctr = CRYPTO_bswap4(ctx->Yi.d[3]);
++  uint32_t ctr = GCM_bswap4(ctx->Yi.d[3]);
+   while (len >= GHASH_CHUNK) {
+     (*stream)(in, out, GHASH_CHUNK / 16, key, ctx->Yi.c);
+     ctr += GHASH_CHUNK / 16;
+-    ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++    ctx->Yi.d[3] = GCM_bswap4(ctr);
+     GHASH(ctx, out, GHASH_CHUNK);
+     out += GHASH_CHUNK;
+     in += GHASH_CHUNK;
+@@ -617,7 +625,7 @@ int CRYPTO_gcm128_encrypt_ctr32(GCM128_CONTEXT *ctx, const AES_KEY *key,
+ 
+     (*stream)(in, out, j, key, ctx->Yi.c);
+     ctr += (unsigned int)j;
+-    ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++    ctx->Yi.d[3] = GCM_bswap4(ctr);
+     in += len_blocks;
+     len -= len_blocks;
+     GHASH(ctx, out, len_blocks);
+@@ -626,7 +634,7 @@ int CRYPTO_gcm128_encrypt_ctr32(GCM128_CONTEXT *ctx, const AES_KEY *key,
+   if (len) {
+     (*ctx->gcm_key.block)(ctx->Yi.c, ctx->EKi.c, key);
+     ++ctr;
+-    ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++    ctx->Yi.d[3] = GCM_bswap4(ctr);
+     while (len--) {
+       ctx->Xi.c[n] ^= out[n] = in[n] ^ ctx->EKi.c[n];
+       ++n;
+@@ -689,12 +697,12 @@ int CRYPTO_gcm128_decrypt_ctr32(GCM128_CONTEXT *ctx, const AES_KEY *key,
+   }
+ #endif
+ 
+-  uint32_t ctr = CRYPTO_bswap4(ctx->Yi.d[3]);
++  uint32_t ctr = GCM_bswap4(ctx->Yi.d[3]);
+   while (len >= GHASH_CHUNK) {
+     GHASH(ctx, in, GHASH_CHUNK);
+     (*stream)(in, out, GHASH_CHUNK / 16, key, ctx->Yi.c);
+     ctr += GHASH_CHUNK / 16;
+-    ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++    ctx->Yi.d[3] = GCM_bswap4(ctr);
+     out += GHASH_CHUNK;
+     in += GHASH_CHUNK;
+     len -= GHASH_CHUNK;
+@@ -706,7 +714,7 @@ int CRYPTO_gcm128_decrypt_ctr32(GCM128_CONTEXT *ctx, const AES_KEY *key,
+     GHASH(ctx, in, len_blocks);
+     (*stream)(in, out, j, key, ctx->Yi.c);
+     ctr += (unsigned int)j;
+-    ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++    ctx->Yi.d[3] = GCM_bswap4(ctr);
+     out += len_blocks;
+     in += len_blocks;
+     len -= len_blocks;
+@@ -714,7 +722,7 @@ int CRYPTO_gcm128_decrypt_ctr32(GCM128_CONTEXT *ctx, const AES_KEY *key,
+   if (len) {
+     (*ctx->gcm_key.block)(ctx->Yi.c, ctx->EKi.c, key);
+     ++ctr;
+-    ctx->Yi.d[3] = CRYPTO_bswap4(ctr);
++    ctx->Yi.d[3] = GCM_bswap4(ctr);
+     while (len--) {
+       uint8_t c = in[n];
+       ctx->Xi.c[n] ^= c;
+@@ -737,8 +745,8 @@ int CRYPTO_gcm128_finish(GCM128_CONTEXT *ctx, const uint8_t *tag, size_t len) {
+     GCM_MUL(ctx, Xi);
+   }
+ 
+-  ctx->Xi.u[0] ^= CRYPTO_bswap8(ctx->len.u[0] << 3);
+-  ctx->Xi.u[1] ^= CRYPTO_bswap8(ctx->len.u[1] << 3);
++  ctx->Xi.u[0] ^= GCM_bswap8(ctx->len.u[0] << 3);
++  ctx->Xi.u[1] ^= GCM_bswap8(ctx->len.u[1] << 3);
+   GCM_MUL(ctx, Xi);
+ 
+   ctx->Xi.u[0] ^= ctx->EK0.u[0];
+-- 
+2.39.3
+
+
+From fd7278ca3b542e3826ca38b2af3714169305872d Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 16 Feb 2019 14:58:16 +0100
+Subject: [PATCH 06/17] polyval: change order of swap and shift in
+ reverse_and_mulX_ghash on big endian
+
+---
+ .../boringssl/src/crypto/fipsmodule/modes/polyval.c    | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/third_party/boringssl/src/crypto/fipsmodule/modes/polyval.c b/third_party/boringssl/src/crypto/fipsmodule/modes/polyval.c
+index 857dc0e368..b5349a8d93 100644
+--- a/third_party/boringssl/src/crypto/fipsmodule/modes/polyval.c
++++ b/third_party/boringssl/src/crypto/fipsmodule/modes/polyval.c
+@@ -32,16 +32,26 @@ static void byte_reverse(polyval_block *b) {
+ // the GHASH field, multiplies that by 'x' and serialises the result back into
+ // |b|, but with GHASH's backwards bit ordering.
+ static void reverse_and_mulX_ghash(polyval_block *b) {
++#ifdef OPENSSL_BIGENDIAN
++  uint64_t hi = CRYPTO_bswap8(b->u[0]);
++  uint64_t lo = CRYPTO_bswap8(b->u[1]);
++#else
+   uint64_t hi = b->u[0];
+   uint64_t lo = b->u[1];
++#endif
+   const crypto_word_t carry = constant_time_eq_w(hi & 1, 1);
+   hi >>= 1;
+   hi |= lo << 63;
+   lo >>= 1;
+   lo ^= ((uint64_t) constant_time_select_w(carry, 0xe1, 0)) << 56;
+ 
++#ifdef OPENSSL_BIGENDIAN
++  b->u[0] = lo;
++  b->u[1] = hi;
++#else
+   b->u[0] = CRYPTO_bswap8(lo);
+   b->u[1] = CRYPTO_bswap8(hi);
++#endif
+ }
+ 
+ // POLYVAL(H, X_1, ..., X_n) =
+-- 
+2.39.3
+
+
+From 04624115fd96866d2b4f2f84085756bb5a1ff1b6 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 16 Feb 2019 15:05:10 +0100
+Subject: [PATCH 07/17] Fix curve25519 on big endian
+
+---
+ .../boringssl/src/crypto/curve25519/spake25519.c   | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/third_party/boringssl/src/crypto/curve25519/spake25519.c b/third_party/boringssl/src/crypto/curve25519/spake25519.c
+index c45d15a58d..cbc5cb0794 100644
+--- a/third_party/boringssl/src/crypto/curve25519/spake25519.c
++++ b/third_party/boringssl/src/crypto/curve25519/spake25519.c
+@@ -384,7 +384,13 @@ int SPAKE2_generate_msg(SPAKE2_CTX *ctx, uint8_t *out, size_t *out_len,
+   // bit and so one for all the bottom three bits.
+ 
+   scalar password_scalar;
++#ifdef OPENSSL_BIGENDIAN
++  uint8_t *pws = (uint8_t *)&password_scalar;
++  for (size_t i = 0; i < sizeof(password_scalar); i++)
++    pws[i ^ (BN_BYTES-1)] = password_tmp[i];
++#else
+   OPENSSL_memcpy(&password_scalar, password_tmp, sizeof(password_scalar));
++#endif
+ 
+   // |password_scalar| is the result of |x25519_sc_reduce| and thus is, at
+   // most, $l-1$ (where $l$ is |kOrder|, the order of the prime-order subgroup
+@@ -415,8 +421,14 @@ int SPAKE2_generate_msg(SPAKE2_CTX *ctx, uint8_t *out, size_t *out_len,
+     assert((password_scalar.words[0] & 7) == 0);
+   }
+ 
++#ifdef OPENSSL_BIGENDIAN
++  uint8_t *pwsw = (uint8_t *)password_scalar.words;
++  for (size_t i = 0; i < sizeof(ctx->password_scalar); i++)
++    ctx->password_scalar[i] = password_tmp[i ^ (BN_BYTES-1)];
++#else
+   OPENSSL_memcpy(ctx->password_scalar, password_scalar.words,
+-                 sizeof(ctx->password_scalar));
++		 sizeof(ctx->password_scalar));
++#endif
+ 
+   ge_p3 mask;
+   x25519_ge_scalarmult_small_precomp(&mask, ctx->password_scalar,
+-- 
+2.39.3
+
+
+From 917fc2937ba1c65a2ce1485f7b285636c9f91273 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 16 Feb 2019 15:06:56 +0100
+Subject: [PATCH 08/17] Fix scrypt on big endian
+
+---
+ third_party/boringssl/src/crypto/evp/scrypt.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/third_party/boringssl/src/crypto/evp/scrypt.c b/third_party/boringssl/src/crypto/evp/scrypt.c
+index 8212cd15ee..7ddcaef967 100644
+--- a/third_party/boringssl/src/crypto/evp/scrypt.c
++++ b/third_party/boringssl/src/crypto/evp/scrypt.c
+@@ -192,10 +192,28 @@ int EVP_PBE_scrypt(const char *password, size_t password_len,
+     goto err;
+   }
+ 
++#ifdef OPENSSL_BIGENDIAN
++  uint32_t *B32 = B->words;
++  size_t B_words = B_bytes >> 2;
++  do {
++    *B32 = CRYPTO_bswap4(*B32);
++    B32++;
++  } while(--B_words);
++#endif
++
+   for (uint64_t i = 0; i < p; i++) {
+     scryptROMix(B + 2 * r * i, r, N, T, V);
+   }
+ 
++#ifdef OPENSSL_BIGENDIAN
++  B32 = B->words;
++  B_words = B_bytes >> 2;
++  do {
++    *B32 = CRYPTO_bswap4(*B32);
++    B32++;
++  } while(--B_words);
++#endif
++
+   if (!PKCS5_PBKDF2_HMAC(password, password_len, (const uint8_t *)B, B_bytes, 1,
+                          EVP_sha256(), key_len, out_key)) {
+     goto err;
+-- 
+2.39.3
+
+
+From e91f74436de90a790d0b02d6458fe6ae91ba78bc Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 16 Feb 2019 15:07:29 +0100
+Subject: [PATCH 09/17] Fix chacha20 on big endian
+
+---
+ .../boringssl/src/crypto/chacha/chacha.c      | 29 +++++++++++++++----
+ 1 file changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/third_party/boringssl/src/crypto/chacha/chacha.c b/third_party/boringssl/src/crypto/chacha/chacha.c
+index 1092b7aa28..9488ffc9c7 100644
+--- a/third_party/boringssl/src/crypto/chacha/chacha.c
++++ b/third_party/boringssl/src/crypto/chacha/chacha.c
+@@ -41,9 +41,26 @@ static const uint8_t sigma[16] = { 'e', 'x', 'p', 'a', 'n', 'd', ' ', '3',
+ void CRYPTO_hchacha20(uint8_t out[32], const uint8_t key[32],
+                       const uint8_t nonce[16]) {
+   uint32_t x[16];
+-  OPENSSL_memcpy(x, sigma, sizeof(sigma));
+-  OPENSSL_memcpy(&x[4], key, 32);
+-  OPENSSL_memcpy(&x[12], nonce, 16);
++
++  x[0] = CRYPTO_load_u32_le(sigma + 0);
++  x[1] = CRYPTO_load_u32_le(sigma + 4);
++  x[2] = CRYPTO_load_u32_le(sigma + 8);
++  x[3] = CRYPTO_load_u32_le(sigma + 12);
++
++  x[4] = CRYPTO_load_u32_le(key + 0);
++  x[5] = CRYPTO_load_u32_le(key + 4);
++  x[6] = CRYPTO_load_u32_le(key + 8);
++  x[7] = CRYPTO_load_u32_le(key + 12);
++
++  x[8] = CRYPTO_load_u32_le(key + 16);
++  x[9] = CRYPTO_load_u32_le(key + 20);
++  x[10] = CRYPTO_load_u32_le(key + 24);
++  x[11] = CRYPTO_load_u32_le(key + 28);
++
++  x[12] = CRYPTO_load_u32_le(nonce + 0);
++  x[13] = CRYPTO_load_u32_le(nonce + 4);
++  x[14] = CRYPTO_load_u32_le(nonce + 8);
++  x[15] = CRYPTO_load_u32_le(nonce + 12);
+ 
+   for (size_t i = 0; i < 20; i += 2) {
+     QUARTERROUND(0, 4, 8, 12)
+@@ -56,8 +73,10 @@ void CRYPTO_hchacha20(uint8_t out[32], const uint8_t key[32],
+     QUARTERROUND(3, 4, 9, 14)
+   }
+ 
+-  OPENSSL_memcpy(out, &x[0], sizeof(uint32_t) * 4);
+-  OPENSSL_memcpy(&out[16], &x[12], sizeof(uint32_t) * 4);
++  for (size_t i = 0; i < 4; ++i) {
++    CRYPTO_store_u32_le(out + 4 * i, x[i]);
++    CRYPTO_store_u32_le(&out[16] + 4 * i, x[12+i]);
++  }
+ }
+ 
+ #if defined(CHACHA20_ASM)
+-- 
+2.39.3
+
+
+From 496edb5ac74fa704e9d8752a0451929130a2da0b Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 16 Feb 2019 15:08:36 +0100
+Subject: [PATCH 10/17] Fixed last failing test on big-endian :-)
+
+---
+ third_party/boringssl/src/crypto/compiler_test.cc | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/third_party/boringssl/src/crypto/compiler_test.cc b/third_party/boringssl/src/crypto/compiler_test.cc
+index 9102337594..f7f47d4a91 100644
+--- a/third_party/boringssl/src/crypto/compiler_test.cc
++++ b/third_party/boringssl/src/crypto/compiler_test.cc
+@@ -40,9 +40,13 @@ static void CheckRepresentation(T value) {
+   UnsignedT value_u = static_cast<UnsignedT>(value);
+   EXPECT_EQ(sizeof(UnsignedT), sizeof(T));
+ 
+-  // Integers must be little-endian.
++  // Integers must be either big-endian or little-endian.
+   uint8_t expected[sizeof(UnsignedT)];
++#ifdef OPENSSL_BIGENDIAN
++  for (size_t i = sizeof(UnsignedT); i-- > 0; ) {
++#else
+   for (size_t i = 0; i < sizeof(UnsignedT); i++) {
++#endif
+     expected[i] = static_cast<uint8_t>(value_u);
+     // Divide instead of right-shift to appease compilers that warn if |T| is a
+     // char. The explicit cast is also needed to appease MSVC if integer
+-- 
+2.39.3
+
+
+From 1b60dac0b06abc52fdcfdede89d98fc7cf5ebfae Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 22:35:13 +0100
+Subject: [PATCH 11/17] Fix ec on big endian
+
+---
+ third_party/boringssl/src/crypto/ec_extra/hash_to_curve.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/third_party/boringssl/src/crypto/ec_extra/hash_to_curve.c b/third_party/boringssl/src/crypto/ec_extra/hash_to_curve.c
+index 6c9abf937a..713aa03174 100644
+--- a/third_party/boringssl/src/crypto/ec_extra/hash_to_curve.c
++++ b/third_party/boringssl/src/crypto/ec_extra/hash_to_curve.c
+@@ -166,7 +166,11 @@ static void big_endian_to_words(BN_ULONG *out, size_t num_words,
+   OPENSSL_memset(out, 0, num_words * sizeof(BN_ULONG));
+   uint8_t *out_u8 = (uint8_t *)out;
+   for (size_t i = 0; i < len; i++) {
++#ifdef OPENSSL_BIGENDIAN
++    out_u8[(len - 1 - i) ^ (sizeof(BN_ULONG) - 1)] = in[i];
++#else
+     out_u8[len - 1 - i] = in[i];
++#endif
+   }
+ }
+ 
+-- 
+2.39.3
+
+
+From b7960b05de82a0ae6b7ead9225da0bea98df796a Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 21 Feb 2021 17:54:22 +0100
+Subject: [PATCH 12/17] Fix bytestring on big endian
+
+---
+ third_party/boringssl/src/crypto/bytestring/cbb.c | 12 ++++++++++++
+ third_party/boringssl/src/crypto/bytestring/cbs.c |  4 ++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/third_party/boringssl/src/crypto/bytestring/cbb.c b/third_party/boringssl/src/crypto/bytestring/cbb.c
+index 5280dc8f9c..c459f57413 100644
+--- a/third_party/boringssl/src/crypto/bytestring/cbb.c
++++ b/third_party/boringssl/src/crypto/bytestring/cbb.c
+@@ -521,17 +521,29 @@ int CBB_add_asn1_int64_with_tag(CBB *cbb, int64_t value, CBS_ASN1_TAG tag) {
+ 
+   uint8_t bytes[sizeof(int64_t)];
+   memcpy(bytes, &value, sizeof(value));
++#ifdef OPENSSL_BIGENDIAN
++  int start = 0;
++  // Skip leading sign-extension bytes unless they are necessary.
++  while (start < 7 && (bytes[start] == 0xff && (bytes[start + 1] & 0x80))) {
++    start++;
++  }
++#else
+   int start = 7;
+   // Skip leading sign-extension bytes unless they are necessary.
+   while (start > 0 && (bytes[start] == 0xff && (bytes[start - 1] & 0x80))) {
+     start--;
+   }
++#endif
+ 
+   CBB child;
+   if (!CBB_add_asn1(cbb, &child, tag)) {
+     return 0;
+   }
++#ifdef OPENSSL_BIGENDIAN
++  for (int i = start; i <= 7; i++) {
++#else
+   for (int i = start; i >= 0; i--) {
++#endif
+     if (!CBB_add_u8(&child, bytes[i])) {
+       return 0;
+     }
+diff --git a/third_party/boringssl/src/crypto/bytestring/cbs.c b/third_party/boringssl/src/crypto/bytestring/cbs.c
+index eb7e4dc984..9668f1dd2a 100644
+--- a/third_party/boringssl/src/crypto/bytestring/cbs.c
++++ b/third_party/boringssl/src/crypto/bytestring/cbs.c
+@@ -522,7 +522,11 @@ int CBS_get_asn1_int64(CBS *cbs, int64_t *out) {
+   uint8_t sign_extend[sizeof(int64_t)];
+   memset(sign_extend, is_negative ? 0xff : 0, sizeof(sign_extend));
+   for (size_t i = 0; i < len; i++) {
++#ifdef OPENSSL_BIGENDIAN
++    sign_extend[sizeof(int64_t) - i - 1] = data[len - i - 1];
++#else
+     sign_extend[i] = data[len - i - 1];
++#endif
+   }
+   memcpy(out, sign_extend, sizeof(sign_extend));
+   return 1;
+-- 
+2.39.3
+
+
+From c17d496bebe4f86ee39f2c6fe04f67154dd84357 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 21 Feb 2021 17:54:52 +0100
+Subject: [PATCH 13/17] Fix AES on big endian
+
+---
+ .../src/crypto/fipsmodule/aes/aes_nohw.c      | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/third_party/boringssl/src/crypto/fipsmodule/aes/aes_nohw.c b/third_party/boringssl/src/crypto/fipsmodule/aes/aes_nohw.c
+index c5dec0e5c1..d4e0a5f95f 100644
+--- a/third_party/boringssl/src/crypto/fipsmodule/aes/aes_nohw.c
++++ b/third_party/boringssl/src/crypto/fipsmodule/aes/aes_nohw.c
+@@ -289,6 +289,25 @@ static inline aes_word_t aes_nohw_delta_swap(aes_word_t a, aes_word_t mask,
+ // http://programming.sirrida.de/calcperm.php on smaller inputs.
+ #if defined(OPENSSL_64_BIT)
+ static inline uint64_t aes_nohw_compact_word(uint64_t a) {
++#ifdef OPENSSL_BIGENDIAN
++  // Numbering the 64/4 = 16 4-bit chunks, least to most significant, we swap
++  // pairs of those chunks:
++  //   14 15 12 13 | 10 11 8  9 | 6 7 4 5 | 2 3 0 1 =>
++  //   15 14 13 12 | 11 10 9  8 | 7 6 5 4 | 3 2 1 0
++  a = aes_nohw_delta_swap(a, UINT64_C(0x0f0f0f0f0f0f0f0f), 4);
++  // Swap quartets of those chunks:
++  //   15 14 13 12 | 11 10 9  8 | 7 6 5 4 | 3 2 1 0 =>
++  //   12 14 13 15 |  8 10 9 11 | 4 6 5 7 | 0 2 1 3
++  a = aes_nohw_delta_swap(a, UINT64_C(0x000f000f000f000f), 12);
++  // Swap quartets of 8-bit chunks (still numbering by 4-bit chunks):
++  //   12 14 13 15 | 8 10  9 11 | 4 6 5 7 | 0 2 1 3 =>
++  //    9 11 13 15 | 8 10 12 14 | 1 3 5 7 | 0 2 4 6
++  a = aes_nohw_delta_swap(a, UINT64_C(0x000000ff000000ff), 24);
++  // Swap quartets of 16-bit chunks (still numbering by 4-bit chunks):
++  //   9 11 13 15 | 8 10 12 14 | 1 3 5 7 | 0  2  4  6 =>
++  //   0  2  4  6 | 8 10 12 14 | 1 3 5 7 | 9 11 13 15
++  a = aes_nohw_delta_swap(a, UINT64_C(0x000000000000ffff), 48);
++#else
+   // Numbering the 64/2 = 16 4-bit chunks, least to most significant, we swap
+   // quartets of those chunks:
+   //   0 1 2 3 | 4 5 6 7 | 8  9 10 11 | 12 13 14 15 =>
+@@ -302,14 +321,22 @@ static inline uint64_t aes_nohw_compact_word(uint64_t a) {
+   //   0 2 4 6 | 1  3  5  7 | 8 10 12 14 | 9 11 13 15 =>
+   //   0 2 4 6 | 8 10 12 14 | 1  3  5  7 | 9 11 13 15
+   a = aes_nohw_delta_swap(a, UINT64_C(0x00000000ffff0000), 16);
++#endif
+   return a;
+ }
+ 
+ static inline uint64_t aes_nohw_uncompact_word(uint64_t a) {
+   // Reverse the steps of |aes_nohw_uncompact_word|.
++#ifdef OPENSSL_BIGENDIAN
++  a = aes_nohw_delta_swap(a, UINT64_C(0x000000000000ffff), 48);
++  a = aes_nohw_delta_swap(a, UINT64_C(0x000000ff000000ff), 24);
++  a = aes_nohw_delta_swap(a, UINT64_C(0x000f000f000f000f), 12);
++  a = aes_nohw_delta_swap(a, UINT64_C(0x0f0f0f0f0f0f0f0f), 4);
++#else
+   a = aes_nohw_delta_swap(a, UINT64_C(0x00000000ffff0000), 16);
+   a = aes_nohw_delta_swap(a, UINT64_C(0x0000ff000000ff00), 8);
+   a = aes_nohw_delta_swap(a, UINT64_C(0x00f000f000f000f0), 4);
++#endif
+   return a;
+ }
+ #else   // !OPENSSL_64_BIT
+-- 
+2.39.3
+
+
+From 6199129b4e2990111e1c878fc2582c6c4064f82f Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 21 Feb 2021 17:56:18 +0100
+Subject: [PATCH 14/17] Fix siphash on big endian
+
+---
+ third_party/boringssl/src/crypto/siphash/siphash_test.cc | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/third_party/boringssl/src/crypto/siphash/siphash_test.cc b/third_party/boringssl/src/crypto/siphash/siphash_test.cc
+index 6407e0da56..556e358fb5 100644
+--- a/third_party/boringssl/src/crypto/siphash/siphash_test.cc
++++ b/third_party/boringssl/src/crypto/siphash/siphash_test.cc
+@@ -29,6 +29,10 @@ TEST(SipHash, Basic) {
+   }
+   uint64_t key[2];
+   memcpy(key, key_bytes, sizeof(key));
++#ifdef OPENSSL_BIGENDIAN
++  key[0] = CRYPTO_bswap8(key[0]);
++  key[1] = CRYPTO_bswap8(key[1]);
++#endif
+ 
+   uint8_t input[15];
+   for (unsigned i = 0; i < sizeof(input); i++) {
+@@ -50,6 +54,11 @@ TEST(SipHash, Vectors) {
+ 
+     uint64_t key_words[2];
+     memcpy(key_words, key.data(), key.size());
++#ifdef OPENSSL_BIGENDIAN
++    key_words[0] = CRYPTO_bswap8(key_words[0]);
++    key_words[1] = CRYPTO_bswap8(key_words[1]);
++    std::reverse(hash.begin(), hash.end());
++#endif
+     uint64_t result = SIPHASH_24(key_words, msg.data(), msg.size());
+     EXPECT_EQ(Bytes(reinterpret_cast<uint8_t *>(&result), sizeof(result)),
+               Bytes(hash));
+-- 
+2.39.3
+
+
+From 7191198c8631ab2b3a961af741b98e22dcb7e4a4 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 21 Feb 2021 18:00:43 +0100
+Subject: [PATCH 15/17] Fix GCM on big endian
+
+---
+ .../src/crypto/fipsmodule/modes/gcm.c         |  8 +++---
+ .../src/crypto/fipsmodule/modes/gcm_nohw.c    | 25 +++++++++++++++++++
+ 2 files changed, 29 insertions(+), 4 deletions(-)
+
+diff --git a/third_party/boringssl/src/crypto/fipsmodule/modes/gcm.c b/third_party/boringssl/src/crypto/fipsmodule/modes/gcm.c
+index 6a38b66aaa..7cb297582c 100644
+--- a/third_party/boringssl/src/crypto/fipsmodule/modes/gcm.c
++++ b/third_party/boringssl/src/crypto/fipsmodule/modes/gcm.c
+@@ -425,7 +425,7 @@ int CRYPTO_gcm128_encrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+       for (size_t i = 0; i < 16; i += sizeof(crypto_word_t)) {
+         CRYPTO_store_word_le(out + i,
+                              CRYPTO_load_word_le(in + i) ^
+-                                 ctx->EKi.t[i / sizeof(crypto_word_t)]);
++                                 CRYPTO_load_word_le(ctx->EKi.t + i / sizeof(crypto_word_t)));
+       }
+       out += 16;
+       in += 16;
+@@ -443,7 +443,7 @@ int CRYPTO_gcm128_encrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+       for (size_t i = 0; i < 16; i += sizeof(crypto_word_t)) {
+         CRYPTO_store_word_le(out + i,
+                              CRYPTO_load_word_le(in + i) ^
+-                                 ctx->EKi.t[i / sizeof(crypto_word_t)]);
++                                 CRYPTO_load_word_le(ctx->EKi.t + i / sizeof(crypto_word_t)));
+       }
+       out += 16;
+       in += 16;
+@@ -518,7 +518,7 @@ int CRYPTO_gcm128_decrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+       for (size_t i = 0; i < 16; i += sizeof(crypto_word_t)) {
+         CRYPTO_store_word_le(out + i,
+                              CRYPTO_load_word_le(in + i) ^
+-                                 ctx->EKi.t[i / sizeof(crypto_word_t)]);
++                                 CRYPTO_load_word_le(ctx->EKi.t + i / sizeof(crypto_word_t)));
+       }
+       out += 16;
+       in += 16;
+@@ -536,7 +536,7 @@ int CRYPTO_gcm128_decrypt(GCM128_CONTEXT *ctx, const AES_KEY *key,
+       for (size_t i = 0; i < 16; i += sizeof(crypto_word_t)) {
+         CRYPTO_store_word_le(out + i,
+                              CRYPTO_load_word_le(in + i) ^
+-                                 ctx->EKi.t[i / sizeof(crypto_word_t)]);
++			         CRYPTO_load_word_le(ctx->EKi.t +i / sizeof(crypto_word_t)));
+       }
+       out += 16;
+       in += 16;
+diff --git a/third_party/boringssl/src/crypto/fipsmodule/modes/gcm_nohw.c b/third_party/boringssl/src/crypto/fipsmodule/modes/gcm_nohw.c
+index 92d54413fd..820e972484 100644
+--- a/third_party/boringssl/src/crypto/fipsmodule/modes/gcm_nohw.c
++++ b/third_party/boringssl/src/crypto/fipsmodule/modes/gcm_nohw.c
+@@ -276,29 +276,54 @@ static void gcm_polyval_nohw(uint64_t Xi[2], const u128 *H) {
+ 
+ void gcm_gmult_nohw(uint64_t Xi[2], const u128 Htable[16]) {
+   uint64_t swapped[2];
++#ifdef OPENSSL_BIGENDIAN
++  swapped[0] = Xi[1];
++  swapped[1] = Xi[0];
++#else
+   swapped[0] = CRYPTO_bswap8(Xi[1]);
+   swapped[1] = CRYPTO_bswap8(Xi[0]);
++#endif
+   gcm_polyval_nohw(swapped, &Htable[0]);
++#ifdef OPENSSL_BIGENDIAN
++  Xi[0] = swapped[1];
++  Xi[1] = swapped[0];
++#else
+   Xi[0] = CRYPTO_bswap8(swapped[1]);
+   Xi[1] = CRYPTO_bswap8(swapped[0]);
++#endif
+ }
+ 
+ void gcm_ghash_nohw(uint64_t Xi[2], const u128 Htable[16], const uint8_t *inp,
+                     size_t len) {
+   uint64_t swapped[2];
++#ifdef OPENSSL_BIGENDIAN
++  swapped[0] = Xi[1];
++  swapped[1] = Xi[0];
++#else
+   swapped[0] = CRYPTO_bswap8(Xi[1]);
+   swapped[1] = CRYPTO_bswap8(Xi[0]);
++#endif
+ 
+   while (len >= 16) {
+     uint64_t block[2];
+     OPENSSL_memcpy(block, inp, 16);
++#ifdef OPENSSL_BIGENDIAN
++    swapped[0] ^= block[1];
++    swapped[1] ^= block[0];
++#else
+     swapped[0] ^= CRYPTO_bswap8(block[1]);
+     swapped[1] ^= CRYPTO_bswap8(block[0]);
++#endif
+     gcm_polyval_nohw(swapped, &Htable[0]);
+     inp += 16;
+     len -= 16;
+   }
+ 
++#ifdef OPENSSL_BIGENDIAN
++  Xi[0] = swapped[1];
++  Xi[1] = swapped[0];
++#else
+   Xi[0] = CRYPTO_bswap8(swapped[1]);
+   Xi[1] = CRYPTO_bswap8(swapped[0]);
++#endif
+ }
+-- 
+2.39.3
+
+
+From ac04d91d10048d21d3ecca3078bab2822694488c Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 4 Jul 2023 19:20:08 +0200
+Subject: [PATCH 16/17] Fix blake2 on big endian
+
+---
+ .../boringssl/src/crypto/blake2/blake2.c      | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/third_party/boringssl/src/crypto/blake2/blake2.c b/third_party/boringssl/src/crypto/blake2/blake2.c
+index 848ed4fa21..548c971149 100644
+--- a/third_party/boringssl/src/crypto/blake2/blake2.c
++++ b/third_party/boringssl/src/crypto/blake2/blake2.c
+@@ -55,6 +55,16 @@ static void blake2b_mix(uint64_t v[16], int a, int b, int c, int d, uint64_t x,
+   v[b] = CRYPTO_rotr_u64(v[b] ^ v[c], 63);
+ }
+ 
++#ifdef OPENSSL_BIGENDIAN
++static void blake2b_byteswap(const void *src, uint64_t dest[BLAKE2B_CBLOCK / sizeof(uint64_t)])
++{
++  unsigned i;
++  const uint64_t *src64 = src;
++  for (i=0; i<BLAKE2B_CBLOCK / sizeof(uint64_t); i++)
++    dest[i] = CRYPTO_bswap8(src64[i]);
++}
++#endif
++
+ static void blake2b_transform(
+     BLAKE2B_CTX *b2b,
+     const uint64_t block_words[BLAKE2B_CBLOCK / sizeof(uint64_t)],
+@@ -126,13 +136,20 @@ void BLAKE2B256_Update(BLAKE2B_CTX *b2b, const void *in_data, size_t len) {
+ 
+   // More input remains therefore we must have filled |b2b->block|.
+   assert(b2b->block_used == BLAKE2B_CBLOCK);
++#ifdef OPENSSL_BIGENDIAN
++  blake2b_byteswap(b2b->block.words, b2b->block.words);
++#endif
+   blake2b_transform(b2b, b2b->block.words, BLAKE2B_CBLOCK,
+                     /*is_final_block=*/0);
+   b2b->block_used = 0;
+ 
+   while (len > BLAKE2B_CBLOCK) {
+     uint64_t block_words[BLAKE2B_CBLOCK / sizeof(uint64_t)];
++#ifdef OPENSSL_BIGENDIAN
++    blake2b_byteswap(data, block_words);
++#else
+     OPENSSL_memcpy(block_words, data, sizeof(block_words));
++#endif
+     blake2b_transform(b2b, block_words, BLAKE2B_CBLOCK, /*is_final_block=*/0);
+     data += BLAKE2B_CBLOCK;
+     len -= BLAKE2B_CBLOCK;
+@@ -145,10 +162,20 @@ void BLAKE2B256_Update(BLAKE2B_CTX *b2b, const void *in_data, size_t len) {
+ void BLAKE2B256_Final(uint8_t out[BLAKE2B256_DIGEST_LENGTH], BLAKE2B_CTX *b2b) {
+   OPENSSL_memset(&b2b->block.bytes[b2b->block_used], 0,
+                  sizeof(b2b->block.bytes) - b2b->block_used);
++#ifdef OPENSSL_BIGENDIAN
++  blake2b_byteswap(b2b->block.words, b2b->block.words);
++#endif
+   blake2b_transform(b2b, b2b->block.words, b2b->block_used,
+                     /*is_final_block=*/1);
+   static_assert(BLAKE2B256_DIGEST_LENGTH <= sizeof(b2b->h), "");
++#ifdef OPENSSL_BIGENDIAN
++  uint64_t hswap[BLAKE2B256_DIGEST_LENGTH / sizeof(uint64_t)];
++  for (int i=0; i<BLAKE2B256_DIGEST_LENGTH / sizeof(uint64_t); i++)
++    hswap[i] = CRYPTO_bswap8(b2b->h[i]);
++  memcpy(out, hswap, BLAKE2B256_DIGEST_LENGTH);
++#else
+   memcpy(out, b2b->h, BLAKE2B256_DIGEST_LENGTH);
++#endif
+ }
+ 
+ void BLAKE2B256(const uint8_t *data, size_t len,
+-- 
+2.39.3
+
+
+From e0e3a1af7b46d2693f77f411c7aa0831e3205751 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 4 Jul 2023 20:14:30 +0200
+Subject: [PATCH 17/17] Fix Kyber on big endian
+
+---
+ third_party/boringssl/src/crypto/kyber/keccak.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/third_party/boringssl/src/crypto/kyber/keccak.c b/third_party/boringssl/src/crypto/kyber/keccak.c
+index f1c012d115..4a871d8d85 100644
+--- a/third_party/boringssl/src/crypto/kyber/keccak.c
++++ b/third_party/boringssl/src/crypto/kyber/keccak.c
+@@ -152,11 +152,19 @@ static void keccak_init(struct BORINGSSL_keccak_st *ctx,
+   // strict aliasing because we require |uint8_t| to be a character type.
+   uint8_t *state_bytes = (uint8_t *)ctx->state;
+   assert(in_len < ctx->rate_bytes);
++#ifdef OPENSSL_BIGENDIAN
++  for (size_t i = 0; i < in_len; i++) {
++    state_bytes[i ^ 7] ^= in[i];
++  }
++  state_bytes[in_len ^ 7] ^= terminator;
++  state_bytes[(ctx->rate_bytes - 1) ^ 7] ^= 0x80;
++#else
+   for (size_t i = 0; i < in_len; i++) {
+     state_bytes[i] ^= in[i];
+   }
+   state_bytes[in_len] ^= terminator;
+   state_bytes[ctx->rate_bytes - 1] ^= 0x80;
++#endif
+   keccak_f(ctx->state);
+ }
+ 
+@@ -192,7 +200,12 @@ void BORINGSSL_keccak_squeeze(struct BORINGSSL_keccak_st *ctx, uint8_t *out,
+     if (todo > remaining) {
+       todo = remaining;
+     }
++#ifdef OPENSSL_BIGENDIAN
++    for (size_t i = 0; i < todo; i++)
++      out[i] = state_bytes[(ctx->offset + i)^7];
++#else
+     OPENSSL_memcpy(out, &state_bytes[ctx->offset], todo);
++#endif
+     out += todo;
+     out_len -= todo;
+     ctx->offset += todo;
+-- 
+2.39.3
+

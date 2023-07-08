@@ -1,0 +1,42 @@
+From 33362d6ce2ce66d92465e5c3c14ca067cddbfa12 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Fri, 22 Feb 2019 19:12:28 +0100
+Subject: [PATCH] EndianSwap: Use a copy constructor rather than assignment to
+ init the union
+
+This is necessary in C++11 and newer if the type being swapped has a
+non-trivial default constructor, in which case the default constructor
+of the union becomes deleted.
+
+This is the case with flatbuffers::Offset<T> which is being swapped in
+the testcase ReflectionTest.
+---
+ third_party/flatbuffers/src/include/flatbuffers/base.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/third_party/flatbuffers/src/include/flatbuffers/base.h b/third_party/flatbuffers/src/include/flatbuffers/base.h
+index 219b6d308a..07e041c020 100644
+--- a/third_party/flatbuffers/src/include/flatbuffers/base.h
++++ b/third_party/flatbuffers/src/include/flatbuffers/base.h
+@@ -381,15 +381,15 @@ template<typename T> T EndianSwap(T t) {
+   if (sizeof(T) == 1) {   // Compile-time if-then's.
+     return t;
+   } else if (sizeof(T) == 2) {
+-    union { T t; uint16_t i; } u = { t };
++    union U { T t; uint16_t i; U(const T& t_) : t(t_) {}} u(t);
+     u.i = FLATBUFFERS_BYTESWAP16(u.i);
+     return u.t;
+   } else if (sizeof(T) == 4) {
+-    union { T t; uint32_t i; } u = { t };
++    union U { T t; uint32_t i; U(const T& t_) : t(t_) {}} u(t);
+     u.i = FLATBUFFERS_BYTESWAP32(u.i);
+     return u.t;
+   } else if (sizeof(T) == 8) {
+-    union { T t; uint64_t i; } u = { t };
++    union U { T t; uint64_t i; U(const T& t_) : t(t_) {}} u(t);
+     u.i = FLATBUFFERS_BYTESWAP64(u.i);
+     return u.t;
+   } else {
+-- 
+2.39.3
+

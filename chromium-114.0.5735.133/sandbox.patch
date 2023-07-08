@@ -1,0 +1,66 @@
+From 3ab2fed6733b8a200aaaa40077e7f3738765fba5 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 28 Apr 2019 15:22:43 +0200
+Subject: [PATCH 1/2] sandbox: Fix SECCOMP_*_[LM]SB_IDX for ppc64
+
+---
+ sandbox/linux/bpf_dsl/seccomp_macros.h | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/sandbox/linux/bpf_dsl/seccomp_macros.h b/sandbox/linux/bpf_dsl/seccomp_macros.h
+index e2a6c24af8..49924b7012 100644
+--- a/sandbox/linux/bpf_dsl/seccomp_macros.h
++++ b/sandbox/linux/bpf_dsl/seccomp_macros.h
+@@ -372,6 +372,7 @@ typedef struct pt_regs regs_struct;
+ 
+ #define SECCOMP_NR_IDX (offsetof(struct arch_seccomp_data, nr))
+ #define SECCOMP_ARCH_IDX (offsetof(struct arch_seccomp_data, arch))
++#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+ #define SECCOMP_IP_MSB_IDX \
+   (offsetof(struct arch_seccomp_data, instruction_pointer) + 4)
+ #define SECCOMP_IP_LSB_IDX \
+@@ -380,6 +381,16 @@ typedef struct pt_regs regs_struct;
+   (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 4)
+ #define SECCOMP_ARG_LSB_IDX(nr) \
+   (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 0)
++#else
++#define SECCOMP_IP_MSB_IDX \
++  (offsetof(struct arch_seccomp_data, instruction_pointer) + 0)
++#define SECCOMP_IP_LSB_IDX \
++  (offsetof(struct arch_seccomp_data, instruction_pointer) + 4)
++#define SECCOMP_ARG_MSB_IDX(nr) \
++  (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 0)
++#define SECCOMP_ARG_LSB_IDX(nr) \
++  (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 4)
++#endif
+ 
+ #define SECCOMP_PT_RESULT(_regs) (_regs).gpr[3]
+ #define SECCOMP_PT_SYSCALL(_regs) (_regs).gpr[0]
+-- 
+2.39.3
+
+
+From 8d10ca1802d0088f6a2e4ed315192c66896b1d7f Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:31:15 +0100
+Subject: [PATCH 2/2] sandbox: Add missing include of <termios.h>
+
+---
+ sandbox/policy/linux/bpf_renderer_policy_linux.cc | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/sandbox/policy/linux/bpf_renderer_policy_linux.cc b/sandbox/policy/linux/bpf_renderer_policy_linux.cc
+index 4397ff4aa1..9f70141df3 100644
+--- a/sandbox/policy/linux/bpf_renderer_policy_linux.cc
++++ b/sandbox/policy/linux/bpf_renderer_policy_linux.cc
+@@ -6,6 +6,7 @@
+ 
+ #include <errno.h>
+ #include <sys/ioctl.h>
++#include <termios.h>
+ 
+ #include "build/build_config.h"
+ #include "sandbox/linux/bpf_dsl/bpf_dsl.h"
+-- 
+2.39.3
+

@@ -1,0 +1,24 @@
+From 52b2d1fe28717269f95ecd35ddc1df85385a1bd8 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:36:38 +0100
+Subject: [PATCH] Add a source needed on ppc64 to the build
+
+---
+ third_party/swiftshader/third_party/llvm-10.0/BUILD.gn | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn b/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
+index 59e52303c5..8efc3cbb91 100644
+--- a/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
++++ b/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
+@@ -867,6 +867,7 @@ swiftshader_llvm_source_set("swiftshader_llvm_support") {
+     "llvm/lib/Support/ARMAttributeParser.cpp",
+     "llvm/lib/Support/ARMBuildAttrs.cpp",
+     "llvm/lib/Support/ARMTargetParser.cpp",
++    "llvm/lib/Support/Atomic.cpp",
+     "llvm/lib/Support/BinaryStreamError.cpp",
+     "llvm/lib/Support/BinaryStreamReader.cpp",
+     "llvm/lib/Support/BinaryStreamRef.cpp",
+-- 
+2.39.3
+

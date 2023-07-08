@@ -1,0 +1,25 @@
+From a30b4ab88d02ff03ea34bed23a2e6e7887fcf71e Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Mon, 3 Jul 2023 13:10:07 +0200
+Subject: [PATCH] Fix compilation with >=c++20
+
+---
+ .../src/Eigen/src/Core/arch/AltiVec/MatrixVectorProduct.h       | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/eigen3/src/Eigen/src/Core/arch/AltiVec/MatrixVectorProduct.h b/third_party/eigen3/src/Eigen/src/Core/arch/AltiVec/MatrixVectorProduct.h
+index e107335b78..829989762d 100644
+--- a/third_party/eigen3/src/Eigen/src/Core/arch/AltiVec/MatrixVectorProduct.h
++++ b/third_party/eigen3/src/Eigen/src/Core/arch/AltiVec/MatrixVectorProduct.h
+@@ -891,7 +891,7 @@ EIGEN_ALWAYS_INLINE Packet pset_init(Packet& c1)
+ template<typename PResPacket, typename ResPacket, typename ResScalar, typename Scalar>
+ struct alpha_store
+ {
+-    alpha_store<PResPacket, ResPacket, ResScalar, Scalar>(ResScalar& alpha) {
++    alpha_store(ResScalar& alpha) {
+         separate.r = pset1_complex<Scalar, ResScalar, ResPacket, 0x3>(alpha);
+         separate.i = pset1_complex<Scalar, ResScalar, ResPacket, 0x0>(alpha);
+     }
+-- 
+2.39.3
+
