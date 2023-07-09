@@ -1,7 +1,7 @@
 From a0e2db60c0aa291dd4c15b3768ac80be7156d32b Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:04:47 +0200
-Subject: [PATCH 01/37] datapack: Byteswap metadata on big endian
+Subject: [PATCH 01/38] datapack: Byteswap metadata on big endian
 
 ---
  ui/base/resource/data_pack.cc | 38 +++++++++++++++--------------------
@@ -202,7 +202,7 @@ index 5a29696cf7..e3bc20da79 100644
 From 7f5a0d089ae6ad7c4194480f5d765a726d5545a8 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:15:57 +0200
-Subject: [PATCH 02/37] i18n: Use correct ICU data file
+Subject: [PATCH 02/38] i18n: Use correct ICU data file
 
 ---
  base/i18n/icu_util.cc | 4 ++++
@@ -231,7 +231,7 @@ index c63a1c39c7..db44a8c441 100644
 From 685b8d282383e235e8fb79520082857f9b58a8e8 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:18:47 +0200
-Subject: [PATCH 03/37] blink: Update variable names in BE part of graphics
+Subject: [PATCH 03/38] blink: Update variable names in BE part of graphics
  code
 
 ---
@@ -260,7 +260,7 @@ index faaf6bfe72..4db9383c01 100644
 From 28ffa265c7d94bdaf986ba1032106eb11f583764 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:58:23 +0200
-Subject: [PATCH 04/37] modp_b64: Set WORDS_BIGENDIAN on big endian
+Subject: [PATCH 04/38] modp_b64: Set WORDS_BIGENDIAN on big endian
 
 ---
  third_party/modp_b64/BUILD.gn | 6 ++++++
@@ -294,7 +294,7 @@ index 13ddaa1845..8be86b704b 100644
 From d3c02264b1902e602c65dae06d48cb8c0c1f6f61 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:59:08 +0200
-Subject: [PATCH 05/37] modp_b64: Fix modp_b64_decode on big endian
+Subject: [PATCH 05/38] modp_b64: Fix modp_b64_decode on big endian
 
 ---
  third_party/modp_b64/modp_b64.cc | 25 +++++++++++++++++++++++++
@@ -369,7 +369,7 @@ index 9be58205f4..b61a956cba 100644
 From a156fc1caca26a23821a2c4888ac616ca630d365 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 11 Nov 2018 16:55:43 +0100
-Subject: [PATCH 06/37] pickle: Use same scalar size in ReadBool as in
+Subject: [PATCH 06/38] pickle: Use same scalar size in ReadBool as in
  WriteBool
 
 ---
@@ -401,7 +401,7 @@ index 0776e11761..8fb322ab95 100644
 From e5d75198b8ab2786e3fb3f1e142abcdc6c176cce Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Mon, 12 Nov 2018 19:51:58 +0100
-Subject: [PATCH 07/37] unittest: Fix some tests exposing endianness to work on
+Subject: [PATCH 07/38] unittest: Fix some tests exposing endianness to work on
  BE
 
 ---
@@ -518,7 +518,7 @@ index 7834139350..d5f74b06fc 100644
 From 25bc35efbc083b3e126e7d5b7d67648f6f8d5692 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 17 Feb 2019 16:43:20 +0100
-Subject: [PATCH 08/37] V4Rice: Fix LE dependency
+Subject: [PATCH 08/38] V4Rice: Fix LE dependency
 
 ---
  components/safe_browsing/core/browser/db/v4_rice.cc    |  9 +++------
@@ -608,7 +608,7 @@ index 3665a4568d..4cb7ac4cb9 100644
 From 2699693099f31821b85ae58825693743e17195cd Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 17 Feb 2019 17:01:13 +0100
-Subject: [PATCH 09/37] url::Canonicalize: Remove unportable reinterpret_cast
+Subject: [PATCH 09/38] url::Canonicalize: Remove unportable reinterpret_cast
 
 ---
  url/url_canon_host.cc    | 3 +--
@@ -654,7 +654,7 @@ index 13481f5fdb..6e75bffc2e 100644
 From 6f59bc5585a98f5aa10babe741ec7c599c44a178 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 23 Feb 2019 14:35:04 +0100
-Subject: [PATCH 10/37] CRLSet: Fix LE dependency
+Subject: [PATCH 10/38] CRLSet: Fix LE dependency
 
 ---
  net/cert/crl_set.cc | 14 +++-----------
@@ -717,7 +717,7 @@ index e84f6ed6e7..4e316ea586 100644
 From 29bb72abc5172c09187c5ad3a5a56ce1bb310a30 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 23 Feb 2019 22:33:02 +0100
-Subject: [PATCH 11/37] crc32c: Fix definition of BYTE_ORDER_BIG_ENDIAN
+Subject: [PATCH 11/38] crc32c: Fix definition of BYTE_ORDER_BIG_ENDIAN
 
 ---
  third_party/crc32c/BUILD.gn | 5 +----
@@ -749,7 +749,7 @@ index d2a79338ad..e829e7c634 100644
 From c4b5a4c168c883fc18aabc8f7a61bf1284baa51f Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 6 Mar 2019 20:26:32 +0100
-Subject: [PATCH 12/37] blink: handle pixel format selection independent of
+Subject: [PATCH 12/38] blink: handle pixel format selection independent of
  byteorder
 
 ---
@@ -838,7 +838,7 @@ index 480917ca03..d84dccabec 100644
 From 4076b3f1e7897df052f5a576013d617c3537128f Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 27 Mar 2019 21:32:08 +0100
-Subject: [PATCH 13/37] blink: Fix BMP header and pixel parsing on big endian
+Subject: [PATCH 13/38] blink: Fix BMP header and pixel parsing on big endian
 
 ---
  .../platform/image-decoders/bmp/bmp_image_reader.h         | 7 ++++---
@@ -886,7 +886,7 @@ index 28ba32f6be..b1c0c3e09c 100644
 From e9315e9f5d23c6602175e4bb2ebfcc754ec90a19 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 27 Mar 2019 21:33:04 +0100
-Subject: [PATCH 14/37] blink: Fix alpha check in GC tests
+Subject: [PATCH 14/38] blink: Fix alpha check in GC tests
 
 ---
  .../blink/renderer/platform/graphics/graphics_context_test.cc | 4 ++--
@@ -921,7 +921,7 @@ index 939c6984a9..28f7edbfb2 100644
 From 84b1134f92ecd4f11fa209fdfc41a1a3d40982e2 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 27 Mar 2019 21:34:12 +0100
-Subject: [PATCH 15/37] blink: Fix typo in WebGL image conversion test
+Subject: [PATCH 15/38] blink: Fix typo in WebGL image conversion test
 
 ---
  .../platform/graphics/gpu/webgl_image_conversion_test.cc    | 6 +++---
@@ -951,7 +951,7 @@ index 3578a26afe..b86d8d5dee 100644
 From 19921e60a7d73b350ab2cc6978252663cd91cd14 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 6 Apr 2019 15:43:20 +0200
-Subject: [PATCH 16/37] blink: Fix bizarre endianness dependency in TensorFlow
+Subject: [PATCH 16/38] blink: Fix bizarre endianness dependency in TensorFlow
  output
 
 ---
@@ -1049,7 +1049,7 @@ index 57c2f0c121..383991cbbe 100644
 From 45d6ec6713f15563c13774a1c9a7e1448f767d5b Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 6 Apr 2019 23:35:33 +0200
-Subject: [PATCH 17/37] gfx: Use correct function to create a SkPMColor rather
+Subject: [PATCH 17/38] gfx: Use correct function to create a SkPMColor rather
  than a SkColor
 
 ---
@@ -1076,7 +1076,7 @@ index 20e488ad62..d421596210 100644
 From 678a8fa20fbdf9066c2c2e861c9154103093d12e Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 11:54:18 +0200
-Subject: [PATCH 18/37] skia: Fix testcases to use SkPMColor rather than
+Subject: [PATCH 18/38] skia: Fix testcases to use SkPMColor rather than
  SkColor for internal access
 
 ---
@@ -1151,7 +1151,7 @@ index b3a1ef50c6..f17fa4c38b 100644
 From e2e902d9f53cc83daf6f649cafa2f31bc20c52f0 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 14:19:52 +0200
-Subject: [PATCH 19/37] gfx: Convert PMColor to Color before passing it to
+Subject: [PATCH 19/38] gfx: Convert PMColor to Color before passing it to
  BGRAGrayEqualsA8Gray
 
 ---
@@ -1178,7 +1178,7 @@ index 7644ddd64e..b3037a3ac2 100644
 From 08b3389693ef8bb645c766ef30dcd9b75a84ff07 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 16:51:54 +0200
-Subject: [PATCH 20/37] gfx: select JPEG color space in an endian-neutral
+Subject: [PATCH 20/38] gfx: select JPEG color space in an endian-neutral
  manner
 
 ---
@@ -1212,7 +1212,7 @@ index 62005fcc39..cb7836af18 100644
 From 4b854355ad8f1b6af641a2931e51d5c1923ea0a2 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 21:22:12 +0200
-Subject: [PATCH 21/37] gfx: Fix color analysis on big endian
+Subject: [PATCH 21/38] gfx: Fix color analysis on big endian
 
 This also adds an ARGB decode mode to the PNG codec since
 CalculateKMeanColorOfBuffer needs the pixels to be in SkColor (which
@@ -1369,7 +1369,7 @@ index 86eeb7ad29..0c626b08f5 100644
 From bb7b6039641ffeee387bc3645756ae0839b63b71 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 11:47:03 +0200
-Subject: [PATCH 22/37] media/renderers: Fix component order test to check
+Subject: [PATCH 22/38] media/renderers: Fix component order test to check
  bytes instead of shifts
 
 ---
@@ -1407,7 +1407,7 @@ index 5579f379cc..79f3505392 100644
 From 1ec8f90cef072109b9a50897373e4f6539094ae2 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 12:07:30 +0200
-Subject: [PATCH 23/37] media/ffmpeg: Remove #error on endianness
+Subject: [PATCH 23/38] media/ffmpeg: Remove #error on endianness
 
 ---
  media/ffmpeg/ffmpeg_common.cc | 4 ----
@@ -1435,7 +1435,7 @@ index 65c7a4958b..fb19cf7822 100644
 From ab4e099ef3c82f795be3ae6f6b4b16c1a83fe14d Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 12:07:49 +0200
-Subject: [PATCH 24/37] media/formats/mp4: Fix endian dependent code in
+Subject: [PATCH 24/38] media/formats/mp4: Fix endian dependent code in
  OpusSpecificBox::Parse
 
 ---
@@ -1477,7 +1477,7 @@ index 2cded6670f..21d24d0fae 100644
 From 9cf24665d848a71724008bd212aa2ff7729f3ec0 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 12:25:41 +0200
-Subject: [PATCH 25/37] skia: Select RGBA component order on big endian
+Subject: [PATCH 25/38] skia: Select RGBA component order on big endian
 
 ---
  skia/config/SkUserConfig.h | 18 +++++++-----------
@@ -1531,7 +1531,7 @@ index f81410af51..195998e3b2 100644
 From 78e1e417e47ce64e9f3fa8b15424e3694dd5438f Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 14 Feb 2021 19:28:59 +0100
-Subject: [PATCH 26/37] media/audio: Fix byteswapping of WAV AudioFormat
+Subject: [PATCH 26/38] media/audio: Fix byteswapping of WAV AudioFormat
 
 ---
  media/audio/wav_audio_handler.cc | 5 +++++
@@ -1560,7 +1560,7 @@ index e049a92f64..57de9a9f53 100644
 From 8e061bc2c8f602458ffbef5009aca99e250124fb Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 23 Feb 2019 17:50:37 +0100
-Subject: [PATCH 27/37] BrowserThemePack: Remove byte order check since the one
+Subject: [PATCH 27/38] BrowserThemePack: Remove byte order check since the one
  in ui::DataPack was removed
 
 ---
@@ -1595,7 +1595,7 @@ index cdfeef31c3..60bd5d9d7d 100644
 From f34434869bf66134b54f7405a1001a161c17310e Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Fri, 5 Mar 2021 23:08:25 +0100
-Subject: [PATCH 28/37] base/allocator: Disable alternate pointer
+Subject: [PATCH 28/38] base/allocator: Disable alternate pointer
  transformation on BE
 
 ---
@@ -1657,7 +1657,7 @@ index e31933927e..8ec7c0f0d1 100644
 From bb6393960c6b8eaaa183f859b73eab70c2f2cb28 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Mar 2021 01:07:10 +0100
-Subject: [PATCH 29/37] ui/gtk: After rendering, convert CAIRO_FORMAT_ARGB32 to
+Subject: [PATCH 29/38] ui/gtk: After rendering, convert CAIRO_FORMAT_ARGB32 to
  SkPMColor if needed
 
 ---
@@ -1788,7 +1788,7 @@ index 1925c1a276..903d2c7b95 100644
 From bc49d94dd582679fdcfe7988024c24c7d0d57a4d Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Mar 2021 19:06:21 +0100
-Subject: [PATCH 30/37] ui/base/x: Fix ColorTypeForVisual on big endian
+Subject: [PATCH 30/38] ui/base/x: Fix ColorTypeForVisual on big endian
 
 ---
  ui/base/x/x11_util.cc | 13 +++++++++++++
@@ -1831,7 +1831,7 @@ index c669fc6b23..034541f69a 100644
 From 69eaa797e92b889b217ade0dabc162123f0463bd Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Fri, 12 Mar 2021 22:15:50 +0100
-Subject: [PATCH 31/37] blink: Remove bogus error in avif_image_decoder
+Subject: [PATCH 31/38] blink: Remove bogus error in avif_image_decoder
 
 ---
  .../platform/image-decoders/avif/avif_image_decoder.cc        | 4 ----
@@ -1859,7 +1859,7 @@ index f24e795e7e..7c3da85b90 100644
 From e3b79ab33f65e7d117be727917e4e2f61340f0cb Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 13 Mar 2021 12:52:36 +0100
-Subject: [PATCH 32/37] pdf: Byteswap UTF-16LE strings from PDFium into native
+Subject: [PATCH 32/38] pdf: Byteswap UTF-16LE strings from PDFium into native
 
 ---
  pdf/pdfium/pdfium_api_string_buffer_adapter.cc | 13 +++++++++++++
@@ -1908,7 +1908,7 @@ index 3951440490..040ecc73d0 100644
 From 98ccf002b47d23345ebf31793acd8d5ebac878b9 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 13 Mar 2021 12:53:25 +0100
-Subject: [PATCH 33/37] ppapi: Fix GetNativeImageDataFormat()
+Subject: [PATCH 33/38] ppapi: Fix GetNativeImageDataFormat()
 
 ---
  ppapi/shared_impl/ppb_image_data_shared.cc | 4 ++--
@@ -1937,7 +1937,7 @@ index e540c8ea62..cd613359ac 100644
 From cc2c63a0ba944834cbd0156605fe5266c09220a8 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 11 Apr 2021 18:04:41 +0200
-Subject: [PATCH 34/37] disc_cache: Fix inconsistency in access of
+Subject: [PATCH 34/38] disc_cache: Fix inconsistency in access of
  allocation_map
 
 ---
@@ -1975,7 +1975,7 @@ index 98f86cb94d..869ad3ad8e 100644
 From 430b88ccf02c1144a18879f5c1c8620a58a3d32a Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 5 Jul 2023 10:55:09 +0200
-Subject: [PATCH 35/37] Recognize ppc64 as a variation
+Subject: [PATCH 35/38] Recognize ppc64 as a variation
 
 ---
  base/system/sys_info.cc                                         | 2 ++
@@ -2029,7 +2029,7 @@ index ac34e1377e..c0acfbd727 100644
 From fe72ce4c76090a6cd8ff721185367a280ff31306 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Thu, 6 Jul 2023 11:25:13 +0200
-Subject: [PATCH 36/37] mojo: Make convenience pipe names little endian ints as
+Subject: [PATCH 36/38] mojo: Make convenience pipe names little endian ints as
  documented
 
 ---
@@ -2108,7 +2108,7 @@ index 902f34ff05..135b3f3271 100644
 From 35ec0f090cca32c4fb6ec348ca0b1028908859dd Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Thu, 6 Jul 2023 14:26:42 +0200
-Subject: [PATCH 37/37] cc: Fix size I/O
+Subject: [PATCH 37/38] cc: Fix size I/O
 
 ---
  cc/paint/paint_op_reader.cc | 6 ++++++
@@ -2165,6 +2165,34 @@ index ad5646ee2a..1a9f940786 100644
    WriteSimple(hi);
 +#endif
    return memory;
+ }
+ 
+-- 
+2.39.3
+
+
+From e824807bac23b64c9bd8069eb5f3b18fe752e99c Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 9 Jul 2023 17:45:20 +0200
+Subject: [PATCH 38/38] pdf: Ask for the correct component order from PDFium
+
+---
+ pdf/pdfium/pdfium_engine.cc | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/pdf/pdfium/pdfium_engine.cc b/pdf/pdfium/pdfium_engine.cc
+index 2c40d01dd9..e3af368a42 100644
+--- a/pdf/pdfium/pdfium_engine.cc
++++ b/pdf/pdfium/pdfium_engine.cc
+@@ -3427,6 +3427,10 @@ int PDFiumEngine::GetRenderingFlags() const {
+     flags |= FPDF_PRINTING;
+   if (render_annots_)
+     flags |= FPDF_ANNOT;
++#if defined(ARCH_CPU_BIG_ENDIAN)
++  // We want RGB, not BGR
++  flags |= FPDF_REVERSE_BYTE_ORDER;
++#endif
+   return flags;
  }
  
 -- 

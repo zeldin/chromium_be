@@ -1,0 +1,80 @@
+From 8921ca656db621611535cb539d8a9443cde6f5eb Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 9 Jul 2023 17:42:28 +0200
+Subject: [PATCH] Fix rendering on big endian
+
+---
+ third_party/pdfium/core/fxge/agg/fx_agg_driver.cpp   |  5 +++--
+ third_party/pdfium/core/fxge/skia/fx_skia_device.cpp | 10 +++++++++-
+ 2 files changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/third_party/pdfium/core/fxge/agg/fx_agg_driver.cpp b/third_party/pdfium/core/fxge/agg/fx_agg_driver.cpp
+index a1949de548..093e47b412 100644
+--- a/third_party/pdfium/core/fxge/agg/fx_agg_driver.cpp
++++ b/third_party/pdfium/core/fxge/agg/fx_agg_driver.cpp
+@@ -13,6 +13,7 @@
+ #include <utility>
+ 
+ #include "build/build_config.h"
++#include "core/fxcrt/byteorder.h"
+ #include "core/fxcrt/fx_2d_size.h"
+ #include "core/fxcrt/fx_safe_types.h"
+ #include "core/fxge/cfx_cliprgn.h"
+@@ -73,7 +74,7 @@ void RgbByteOrderCompositeRect(const RetainPtr<CFX_DIBitmap>& pBitmap,
+   int src_g = FXARGB_G(argb);
+   int src_b = FXARGB_B(argb);
+   int Bpp = pBitmap->GetBPP() / 8;
+-  int dib_argb = FXARGB_TOBGRORDERDIB(argb);
++  int dib_argb = fxcrt::ByteSwapToLE32(FXARGB_TOBGRORDERDIB(argb));
+   pdfium::span<uint8_t> pBuffer = pBitmap->GetBuffer();
+   if (src_alpha == 255) {
+     for (int row = rect.top; row < rect.bottom; row++) {
+@@ -768,7 +769,7 @@ CFX_Renderer::CFX_Renderer(const RetainPtr<CFX_DIBitmap>& pDevice,
+                            bool bFullCover,
+                            bool bRgbByteOrder)
+     : m_Alpha(FXARGB_A(color)),
+-      m_Color(bRgbByteOrder ? FXARGB_TOBGRORDERDIB(color) : color),
++      m_Color(fxcrt::ByteSwapToLE32(bRgbByteOrder ? FXARGB_TOBGRORDERDIB(color) : color)),
+       m_bFullCover(bFullCover),
+       m_bRgbByteOrder(bRgbByteOrder),
+       m_ClipBox(GetClipBoxFromRegion(pDevice, pClipRgn)),
+diff --git a/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp b/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp
+index ef3218d7f4..4f6cd46c87 100644
+--- a/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp
++++ b/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp
+@@ -698,7 +698,11 @@ bool Upsample(const RetainPtr<CFX_DIBBase>& pSource,
+         if (!use_gray_colors) {
+           dst32_storage = Fill32BppDestStorageWith1BppSource(pSource);
+           rowBytes = width * sizeof(uint32_t);
++#ifdef ARCH_CPU_BIG_ENDIAN
++          colorType = kARGB_8888_SkColorType;
++#else
+           colorType = kBGRA_8888_SkColorType;
++#endif
+           break;
+         }
+ 
+@@ -731,7 +735,11 @@ bool Upsample(const RetainPtr<CFX_DIBBase>& pSource,
+ 
+         dst32_storage = Fill32BppDestStorageWithPalette(pSource, src_palette);
+         rowBytes = width * sizeof(uint32_t);
++#ifdef ARCH_CPU_BIG_ENDIAN
++        colorType = kARGB_8888_SkColorType;
++#else
+         colorType = kBGRA_8888_SkColorType;
++#endif
+       }
+       break;
+     case 24: {
+@@ -747,7 +755,7 @@ bool Upsample(const RetainPtr<CFX_DIBBase>& pSource,
+         }
+       }
+       rowBytes = width * sizeof(uint32_t);
+-      colorType = kBGRA_8888_SkColorType;
++      colorType = SkColorType::kN32_SkColorType;
+       alphaType = kOpaque_SkAlphaType;
+       break;
+     }
+-- 
+2.39.3
+
