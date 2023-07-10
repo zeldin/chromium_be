@@ -1,7 +1,7 @@
 From e66a5814f916896ab4278f9a8b226f96c9671b5e Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Fri, 7 Jul 2023 17:25:57 +0200
-Subject: [PATCH 01/17] Disable SSE translations on big endian
+Subject: [PATCH 01/16] Disable SSE translations on big endian
 
 ---
  third_party/skia/include/core/SkTypes.h | 2 +-
@@ -27,7 +27,7 @@ index a8053c830f..e1d77180a6 100644
 From 3738bec6166802e929beae3a489e7c0bb6178c5b Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:27:13 +0200
-Subject: [PATCH 02/17] SkJSON: Fix tagged value implementation for big endian
+Subject: [PATCH 02/16] SkJSON: Fix tagged value implementation for big endian
 
 ---
  third_party/skia/src/utils/SkJSON.cpp | 14 ++++++++++++--
@@ -138,7 +138,7 @@ index 96161baf8d..7eec40deeb 100644
 From 1108bb13cac19f7d6a0e9577d4fc9325056b1c87 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 3 Oct 2018 18:59:24 +0200
-Subject: [PATCH 03/17] SkCodevPriv: Add missing include of SkEndian.h
+Subject: [PATCH 03/16] SkCodevPriv: Add missing include of SkEndian.h
 
 ---
  third_party/skia/src/codec/SkCodecPriv.h | 1 +
@@ -163,7 +163,7 @@ index 8e77473b08..8d05f11e91 100644
 From 15e4cfd382b268d7cabe6c4c667bcd2cf578d9a3 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 6 Mar 2019 20:21:59 +0100
-Subject: [PATCH 04/17] skcms: skip swap in read_big_u{16,32} on BE
+Subject: [PATCH 04/16] skcms: skip swap in read_big_u{16,32} on BE
 
 ---
  third_party/skia/modules/skcms/skcms.cc | 8 ++++++++
@@ -210,7 +210,7 @@ index 246c08af94..88cca12658 100644
 From 772dfb5c206f699407631906ca7788dbf099d51b Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 27 Mar 2019 21:29:20 +0100
-Subject: [PATCH 05/17] skcms: Handle endianness in transform code
+Subject: [PATCH 05/16] skcms: Handle endianness in transform code
 
 ---
  .../skia/modules/skcms/src/Transform_inl.h    | 167 +++++++++++++++++-
@@ -630,7 +630,7 @@ index 350f6a20a6..d86aa58c33 100644
 From ff81295e870e006f0075f0546371989470e9540c Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 6 Apr 2019 23:32:18 +0200
-Subject: [PATCH 06/17] SkRasterPipeline_opts: Handle endianness in 32-bit
+Subject: [PATCH 06/16] SkRasterPipeline_opts: Handle endianness in 32-bit
  pixel load/store
 
 ---
@@ -754,7 +754,7 @@ index 15dc61802c..aa481f78c1 100644
 From 7a44d27cc8b7fc8472b6c1bd00347a2cfb9892e7 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 12:00:05 +0200
-Subject: [PATCH 07/17] SkPixmap: Fix getColor on pixmaps with non-premul alpha
+Subject: [PATCH 07/16] SkPixmap: Fix getColor on pixmaps with non-premul alpha
 
 The trick to use SkSwizzle_BGRA_to_PMColor() to get an SkColor from an
 SkPMColor only works on LE, because an SkColor is actually fixed as
@@ -784,7 +784,7 @@ index 658bdfce55..8fba3798c1 100644
 From 558ed66782b4b0bdb64f5239963136c4a22ac978 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 21:12:17 +0200
-Subject: [PATCH 08/17] skcms: skip swap in eval_curve on BE
+Subject: [PATCH 08/16] skcms: skip swap in eval_curve on BE
 
 ---
  third_party/skia/modules/skcms/skcms.cc | 5 +++++
@@ -817,7 +817,7 @@ index 88cca12658..fef3ab7347 100644
 From 8604d042bf8b34d2b38bf7311b66d5fba50cb2e2 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 11:20:48 +0200
-Subject: [PATCH 09/17] SkColor: Fix conversion between SkColor4f and SkColor
+Subject: [PATCH 09/16] SkColor: Fix conversion between SkColor4f and SkColor
 
 SkColor4f is a vector of 4 floats with the fixed component order
 <R, G, B, A>.  SkColor on the other hand is defined as a single
@@ -874,7 +874,7 @@ index 4e8085d275..050ebef4d8 100644
 From 050dce06927a1fcddcda4cee4ca92f129f413d4a Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 11:32:47 +0200
-Subject: [PATCH 10/17] Remove some endianness asserts
+Subject: [PATCH 10/16] Remove some endianness asserts
 
 ---
  third_party/skia/include/private/base/SkLoadUserConfig.h | 2 ++
@@ -913,7 +913,7 @@ index ec7653f34c..e8d0dc0dca 100644
 From 4afa48e79861f715413c43afc6da4437e2f1c3a9 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 6 Jan 2021 13:40:58 +0100
-Subject: [PATCH 11/17] Fix RGBA and BGRA shifts on big endian
+Subject: [PATCH 11/16] Fix RGBA and BGRA shifts on big endian
 
 ---
  third_party/skia/include/core/SkColorPriv.h | 16 ++++++++++++++++
@@ -960,7 +960,7 @@ index f89de9db72..c28efe90fd 100644
 From c252c61f3014e33ce61a97bb05cbd2702cff0d6d Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 6 Jan 2021 13:42:39 +0100
-Subject: [PATCH 12/17] Avoid redefining SK_G32_SHIFT and SK_A32_SHIFT
+Subject: [PATCH 12/16] Avoid redefining SK_G32_SHIFT and SK_A32_SHIFT
 
 ---
  third_party/skia/include/core/SkTypes.h | 4 ++++
@@ -995,7 +995,7 @@ index e1d77180a6..a3d1eb48dd 100644
 From 689a6a3b9f5c453d271e52dc951d8a1093f44cec Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Mar 2021 18:51:58 +0100
-Subject: [PATCH 13/17] SkRasterPipelineBlitter: Fix fMemsetColor handling on
+Subject: [PATCH 13/16] SkRasterPipelineBlitter: Fix fMemsetColor handling on
  big endian
 
 ---
@@ -1044,7 +1044,7 @@ index fe34a44fdc..f166920970 100644
 From a2be8909c390c4cbe7b6ac46c86df713fe3afb2b Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Mar 2021 18:56:28 +0100
-Subject: [PATCH 14/17] Add kARGB_8888_SkColorType and kABGR_8888_SkColorType
+Subject: [PATCH 14/16] Add kARGB_8888_SkColorType and kABGR_8888_SkColorType
 
 ---
  third_party/skia/include/core/SkColorType.h   |  2 +
@@ -1464,7 +1464,7 @@ index 8ac63f9c5f..d0d1abd521 100644
 From 2fc4ea2cfbc4ee6c581823cd14d8c206d3f65b0c Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 13 Mar 2021 12:51:25 +0100
-Subject: [PATCH 15/17] SkSwizzler_opts.h: Fix portable swizzle functions
+Subject: [PATCH 15/16] SkSwizzler_opts.h: Fix portable swizzle functions
 
 ---
  third_party/skia/src/opts/SkSwizzler_opts.h | 138 ++++++++++++++++++++
@@ -1726,86 +1726,64 @@ index c203d8eccd..3ade7f2352 100644
 2.39.3
 
 
-From 7f6f60211982ef2f99263380c2e936cbdfad88cc Mon Sep 17 00:00:00 2001
-From: Marcus Comstedt <marcus@mc.pp.se>
-Date: Fri, 7 Jul 2023 20:47:37 +0200
-Subject: [PATCH 16/17] Set current version when deserializing raw data buffers
-
----
- third_party/skia/src/core/SkFlattenable.cpp | 1 +
- third_party/skia/src/text/gpu/Slug.cpp      | 1 +
- 2 files changed, 2 insertions(+)
-
-diff --git a/third_party/skia/src/core/SkFlattenable.cpp b/third_party/skia/src/core/SkFlattenable.cpp
-index 9fb121d675..f23dadb8af 100644
---- a/third_party/skia/src/core/SkFlattenable.cpp
-+++ b/third_party/skia/src/core/SkFlattenable.cpp
-@@ -150,6 +150,7 @@ size_t SkFlattenable::serialize(void* memory, size_t memory_size,
- sk_sp<SkFlattenable> SkFlattenable::Deserialize(SkFlattenable::Type type, const void* data,
-                                                 size_t size, const SkDeserialProcs* procs) {
-     SkReadBuffer buffer(data, size);
-+    buffer.setVersion(SkPicturePriv::kCurrent_Version);
-     if (procs) {
-         buffer.setDeserialProcs(*procs);
-     }
-diff --git a/third_party/skia/src/text/gpu/Slug.cpp b/third_party/skia/src/text/gpu/Slug.cpp
-index 7b3cf1479e..86eee0bbba 100644
---- a/third_party/skia/src/text/gpu/Slug.cpp
-+++ b/third_party/skia/src/text/gpu/Slug.cpp
-@@ -45,6 +45,7 @@ sk_sp<Slug> Slug::MakeFromBuffer(SkReadBuffer& buffer) {
- 
- sk_sp<Slug> Slug::Deserialize(const void* data, size_t size, const SkStrikeClient* client) {
-     SkReadBuffer buffer{data, size};
-+    buffer.setVersion(SkPicturePriv::kCurrent_Version);
-     return SkMakeSlugFromBuffer(buffer, client);
- }
- 
--- 
-2.39.3
-
-
-From 8a8bb6f2b3b87d80c21ff7a9a09610f91c9d9c4c Mon Sep 17 00:00:00 2001
+From d0b1ced5d69791c1bea98fec5b08e5e2fa76d595 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Fri, 7 Jul 2023 20:50:36 +0200
-Subject: [PATCH 17/17] SkFlattenable: Remove superfluous shifts on big endian
+Subject: [PATCH 16/16] SkFlattenable: Fix string check on big endian
 
 ---
- third_party/skia/src/core/SkReadBuffer.cpp  | 4 ++++
- third_party/skia/src/core/SkWriteBuffer.cpp | 4 ++++
- 2 files changed, 8 insertions(+)
+ third_party/skia/src/core/SkReadBuffer.cpp | 14 ++++++++++----
+ third_party/skia/src/core/SkReadBuffer.h   |  2 +-
+ 2 files changed, 11 insertions(+), 5 deletions(-)
 
 diff --git a/third_party/skia/src/core/SkReadBuffer.cpp b/third_party/skia/src/core/SkReadBuffer.cpp
-index db8b82ed9d..5a6b2e9d22 100644
+index db8b82ed9d..a6f6e6df6e 100644
 --- a/third_party/skia/src/core/SkReadBuffer.cpp
 +++ b/third_party/skia/src/core/SkReadBuffer.cpp
-@@ -482,7 +482,11 @@ SkFlattenable* SkReadBuffer::readRawFlattenable() {
-         } else {
-             // Read the index.  We are guaranteed that the first byte
-             // is zeroed, so we must shift down a byte.
-+#if defined(SK_CPU_LENDIAN)
-             uint32_t index = this->readUInt() >> 8;
+@@ -126,12 +126,12 @@ int32_t SkReadBuffer::read32() {
+     return this->readInt();
+ }
+ 
+-uint8_t SkReadBuffer::peekByte() {
+-    if (this->available() <= 0) {
++uint8_t SkReadBuffer::peekByte(size_t offs) {
++    if (this->available() <= offs) {
+         fError = true;
+         return 0;
+     }
+-    return *((uint8_t*)fCurr);
++    return ((uint8_t*)fCurr)[offs];
+ }
+ 
+ bool SkReadBuffer::readPad32(void* buffer, size_t bytes) {
+@@ -472,7 +472,13 @@ SkFlattenable* SkReadBuffer::readRawFlattenable() {
+         }
+         factory = fFactoryArray[index];
+     } else {
+-        if (this->peekByte() != 0) {
++        if (this->peekByte(
++#ifdef SK_CPU_BENDIAN
++			   3
 +#else
-+            uint32_t index = this->readUInt();
++			   0
 +#endif
-             if (index == 0) {
-                 return nullptr; // writer failed to give us the flattenable
-             }
-diff --git a/third_party/skia/src/core/SkWriteBuffer.cpp b/third_party/skia/src/core/SkWriteBuffer.cpp
-index 5b2ca3672c..e32733eb8c 100644
---- a/third_party/skia/src/core/SkWriteBuffer.cpp
-+++ b/third_party/skia/src/core/SkWriteBuffer.cpp
-@@ -311,7 +311,11 @@ void SkBinaryWriteBuffer::writeFlattenable(const SkFlattenable* flattenable) {
-             // plenty to store the index.  Note that this strategy depends on
-             // being little endian, and type names being non-empty.
-             SkASSERT(0 == *indexPtr >> 24);
-+#if defined(SK_CPU_LENDIAN)
-             this->write32(*indexPtr << 8);
-+#else
-+            this->write32(*indexPtr);
-+#endif
-         } else {
-             this->writeString(name);
-             fFlattenableDict.set(name, fFlattenableDict.count() + 1);
++			   ) != 0) {
+             // If the first byte is non-zero, the flattenable is specified by a string.
+             size_t ignored_length;
+             if (const char* name = this->readString(&ignored_length)) {
+diff --git a/third_party/skia/src/core/SkReadBuffer.h b/third_party/skia/src/core/SkReadBuffer.h
+index ab2e2bb8be..54b8a1eb84 100644
+--- a/third_party/skia/src/core/SkReadBuffer.h
++++ b/third_party/skia/src/core/SkReadBuffer.h
+@@ -109,7 +109,7 @@ public:
+     }
+ 
+     // peek
+-    uint8_t peekByte();
++    uint8_t peekByte(size_t offs = 0);
+ 
+     void readString(SkString* string);
+ 
 -- 
 2.39.3
 
