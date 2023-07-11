@@ -1,7 +1,7 @@
 From de7b7c3496ff23ad5c24fd7551849762dcf0e255 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:04:47 +0200
-Subject: [PATCH 01/35] datapack: Byteswap metadata on big endian
+Subject: [PATCH 01/36] datapack: Byteswap metadata on big endian
 
 ---
  .../chromium/ui/base/resource/data_pack.cc    | 71 ++++++++++++-------
@@ -182,7 +182,7 @@ index 09513e6ae..f574f51d5 100644
 From f786187dc1dfa508f9b79fa957d9787439d6e082 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:15:57 +0200
-Subject: [PATCH 02/35] i18n: Use correct ICU data file
+Subject: [PATCH 02/36] i18n: Use correct ICU data file
 
 ---
  src/3rdparty/chromium/base/i18n/icu_util.cc | 5 +++++
@@ -213,7 +213,7 @@ index 7b2cd1eb4..9a0c918e0 100644
 From 5c133698d00fd97b7ec37f9a74945b23201b6cae Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:18:47 +0200
-Subject: [PATCH 03/35] blink: Update variable names in BE part of graphics
+Subject: [PATCH 03/36] blink: Update variable names in BE part of graphics
  code
 
 ---
@@ -242,7 +242,7 @@ index c951d17db..7b6cc51d4 100644
 From db3dc59ee3a673c2449342b52ab0939c4edcb28b Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:23:24 +0200
-Subject: [PATCH 04/35] blink: Fix SaveRegisters_ppc64 for ABIv1
+Subject: [PATCH 04/36] blink: Fix SaveRegisters_ppc64 for ABIv1
 
 ---
  .../blink/renderer/platform/heap/asm/SaveRegisters_ppc64.S    | 4 ++++
@@ -270,7 +270,7 @@ index ef6c3326e..5670453fc 100644
 From 328c5576ffae23e68e363866574d8dda7e420718 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:58:23 +0200
-Subject: [PATCH 05/35] modp_b64: Set WORDS_BIGENDIAN on big endian
+Subject: [PATCH 05/36] modp_b64: Set WORDS_BIGENDIAN on big endian
 
 ---
  src/3rdparty/chromium/third_party/modp_b64/BUILD.gn | 6 ++++++
@@ -304,7 +304,7 @@ index 539abe158..981d8b65b 100644
 From c03bcf92913702ee62a057fa84f1339cf1848817 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:59:08 +0200
-Subject: [PATCH 06/35] modp_b64: Fix size datatype for modp_b64_decode on big
+Subject: [PATCH 06/36] modp_b64: Fix size datatype for modp_b64_decode on big
  endian
 
 ---
@@ -331,7 +331,7 @@ index fdb8a40ec..a70b08090 100644
 From 9e6ce70f9ddfff7f684c00a736c7e2485b7c02a9 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 11 Nov 2018 16:55:43 +0100
-Subject: [PATCH 07/35] pickle: Use same scalar size in ReadBool as in
+Subject: [PATCH 07/36] pickle: Use same scalar size in ReadBool as in
  WriteBool
 
 ---
@@ -363,7 +363,7 @@ index 413181844..1165af598 100644
 From 1790c269adf6fc51140259a20fd2483c6b630dfb Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Mon, 12 Nov 2018 19:49:39 +0100
-Subject: [PATCH 08/35] sha1: Remove byteswaps on big endian
+Subject: [PATCH 08/36] sha1: Remove byteswaps on big endian
 
 These byteswaps are only needed on little endian.
 ---
@@ -403,7 +403,7 @@ index 8e9de1591..120598eae 100644
 From e4d86ccc54bfd0b668e3d241f8397e9bd7c1e8f3 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Mon, 12 Nov 2018 19:51:58 +0100
-Subject: [PATCH 09/35] unittest: Fix some tests exposing endianness to work on
+Subject: [PATCH 09/36] unittest: Fix some tests exposing endianness to work on
  BE
 
 ---
@@ -520,7 +520,7 @@ index 69ab344dd..94045b913 100644
 From 25220d27a0c3a9c9119effbecce3e81b10e87be8 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 17 Feb 2019 16:43:20 +0100
-Subject: [PATCH 10/35] V4Rice: Fix LE dependency
+Subject: [PATCH 10/36] V4Rice: Fix LE dependency
 
 ---
  .../components/safe_browsing/core/db/v4_rice.cc        |  9 +++------
@@ -610,7 +610,7 @@ index 60bcab907..a91ed2447 100644
 From d38031f9f42eeccc2bf0b6a5d89b68fbc5cd72d2 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 17 Feb 2019 17:01:13 +0100
-Subject: [PATCH 11/35] url::Canonicalize: Remove unportable reinterpret_cast
+Subject: [PATCH 11/36] url::Canonicalize: Remove unportable reinterpret_cast
 
 ---
  src/3rdparty/chromium/url/url_canon_host.cc    | 3 +--
@@ -654,7 +654,7 @@ index 53ae8dd3f..d48421f19 100644
 From c9097a930e603b73e9f1088b4ddf234082f1af74 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 23 Feb 2019 14:35:04 +0100
-Subject: [PATCH 12/35] CRLSet: Fix LE dependency
+Subject: [PATCH 12/36] CRLSet: Fix LE dependency
 
 ---
  src/3rdparty/chromium/net/cert/crl_set.cc | 14 +++-----------
@@ -717,7 +717,7 @@ index 4a99f6eb6..2d4cf85fa 100644
 From cb756254f60280492e86de24dd70089099837c4d Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 23 Feb 2019 22:33:02 +0100
-Subject: [PATCH 13/35] crc32c: Fix definition of BYTE_ORDER_BIG_ENDIAN
+Subject: [PATCH 13/36] crc32c: Fix definition of BYTE_ORDER_BIG_ENDIAN
 
 ---
  src/3rdparty/chromium/third_party/crc32c/BUILD.gn | 5 +----
@@ -749,7 +749,7 @@ index 5ea81e47c..274777983 100644
 From e96eec0cb33ed5804b5184801011a9e21d1d0144 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 6 Mar 2019 20:26:32 +0100
-Subject: [PATCH 14/35] blink: handle pixel format selection independent of
+Subject: [PATCH 14/36] blink: handle pixel format selection independent of
  byteorder
 
 ---
@@ -838,7 +838,7 @@ index 931ca2d0c..8efcc7356 100644
 From b2fa6a544ebb3742b256b56003fb9adecddf0822 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 27 Mar 2019 21:32:08 +0100
-Subject: [PATCH 15/35] blink: Fix BMP header parsing on big endian
+Subject: [PATCH 15/36] blink: Fix BMP header parsing on big endian
 
 ---
  .../renderer/platform/image-decoders/bmp/bmp_image_reader.h  | 5 +++--
@@ -877,7 +877,7 @@ index 1181dff48..6c7f209e0 100644
 From 5e57ed02cf25b788b3ea965754bc97ef42efe837 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 27 Mar 2019 21:33:04 +0100
-Subject: [PATCH 16/35] blink: Fix alpha check in GC tests
+Subject: [PATCH 16/36] blink: Fix alpha check in GC tests
 
 ---
  .../blink/renderer/platform/graphics/graphics_context_test.cc | 4 ++--
@@ -912,7 +912,7 @@ index 36b606a3f..3ea34aa52 100644
 From 8c487f52c3e193d40eddc0b0ce0e8fab2beb8a80 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 27 Mar 2019 21:34:12 +0100
-Subject: [PATCH 17/35] blink: Fix typo in WebGL image conversion test
+Subject: [PATCH 17/36] blink: Fix typo in WebGL image conversion test
 
 ---
  .../platform/graphics/gpu/webgl_image_conversion_test.cc    | 6 +++---
@@ -942,7 +942,7 @@ index e31561585..7f3599ca0 100644
 From 3e00142543b67754da9651e1c5b1ec9e79f4c5f5 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 6 Apr 2019 15:43:20 +0200
-Subject: [PATCH 18/35] blink: Fix bizarre endianness dependency in TensorFlow
+Subject: [PATCH 18/36] blink: Fix bizarre endianness dependency in TensorFlow
  output
 
 ---
@@ -1040,7 +1040,7 @@ index 858e6a14d..b184f4f91 100644
 From 657ec2d0532edaeb3de6c1e3d1af4a344d89da3d Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 6 Apr 2019 23:35:33 +0200
-Subject: [PATCH 19/35] gfx: Use correct function to create a SkPMColor rather
+Subject: [PATCH 19/36] gfx: Use correct function to create a SkPMColor rather
  than a SkColor
 
 ---
@@ -1067,7 +1067,7 @@ index 632550974..622a17d80 100644
 From 7e3823710c4c63fe284069794be875312acd5b06 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 11:54:18 +0200
-Subject: [PATCH 20/35] skia: Fix testcases to use SkPMColor rather than
+Subject: [PATCH 20/36] skia: Fix testcases to use SkPMColor rather than
  SkColor for internal access
 
 ---
@@ -1142,7 +1142,7 @@ index 897095517..253a55140 100644
 From c007d6b63e6b7aff7a00b8704d67e1dfaaad4ff2 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 14:19:52 +0200
-Subject: [PATCH 21/35] gfx: Convert PMColor to Color before passing it to
+Subject: [PATCH 21/36] gfx: Convert PMColor to Color before passing it to
  BGRAGrayEqualsA8Gray
 
 ---
@@ -1169,7 +1169,7 @@ index 260f7c976..b949b3e59 100644
 From bd84d64a2f21da1a1047dc22afe9136898f302ed Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 16:51:54 +0200
-Subject: [PATCH 22/35] gfx: select JPEG color space in an endian-neutral
+Subject: [PATCH 22/36] gfx: select JPEG color space in an endian-neutral
  manner
 
 ---
@@ -1203,7 +1203,7 @@ index 57607610a..018c0a8b6 100644
 From 9e36aa3f5d7a3003992e065044430081caca519c Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 21:22:12 +0200
-Subject: [PATCH 23/35] gfx: Fix color analysis on big endian
+Subject: [PATCH 23/36] gfx: Fix color analysis on big endian
 
 This also adds an ARGB decode mode to the PNG codec since
 CalculateKMeanColorOfBuffer needs the pixels to be in SkColor (which
@@ -1360,7 +1360,7 @@ index 5033a7723..bdc2c8a68 100644
 From 999817594ec5567afd0faa7d7e770a39a34badbf Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 28 Apr 2019 15:22:43 +0200
-Subject: [PATCH 24/35] sandbox: Fix SECCOMP_*_[LM]SB_IDX for ppc64
+Subject: [PATCH 24/36] sandbox: Fix SECCOMP_*_[LM]SB_IDX for ppc64
 
 ---
  .../chromium/sandbox/linux/bpf_dsl/seccomp_macros.h   | 11 +++++++++++
@@ -1402,7 +1402,7 @@ index a6aec544e..2ab38b822 100644
 From 8f300abb76355db2721d8216aeede294b599c3d3 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 11:47:03 +0200
-Subject: [PATCH 25/35] media/renderers: Fix component order test to check
+Subject: [PATCH 25/36] media/renderers: Fix component order test to check
  bytes instead of shifts
 
 ---
@@ -1440,7 +1440,7 @@ index 9523ed60a..deac7db07 100644
 From 3b389d8b6012872ea68a49afdcf9e3f11e3e91d5 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 12:07:30 +0200
-Subject: [PATCH 26/35] media/ffmpeg: Remove #error on endianness
+Subject: [PATCH 26/36] media/ffmpeg: Remove #error on endianness
 
 ---
  src/3rdparty/chromium/media/ffmpeg/ffmpeg_common.cc | 4 ----
@@ -1468,7 +1468,7 @@ index c17dd9f83..44f99b7b8 100644
 From 441cd91703d33f3bcd84b69e3c002f9ffb562586 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 12:07:49 +0200
-Subject: [PATCH 27/35] media/formats/mp4: Fix endian dependent code in
+Subject: [PATCH 27/36] media/formats/mp4: Fix endian dependent code in
  OpusSpecificBox::Parse
 
 ---
@@ -1510,7 +1510,7 @@ index 50a981fe9..a495a1dbd 100644
 From be324d777f38515e0dfeda552c354b6a38bf6df1 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 12:25:41 +0200
-Subject: [PATCH 28/35] skia: Select RGBA component order on big endian
+Subject: [PATCH 28/36] skia: Select RGBA component order on big endian
 
 ---
  .../chromium/skia/config/SkUserConfig.h        | 18 +++++++-----------
@@ -1564,7 +1564,7 @@ index a2a56f485..1da89fcf8 100644
 From 21e089ceea6303cc9499cb4a80c4332d126ba80f Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 14 Feb 2021 19:28:59 +0100
-Subject: [PATCH 29/35] media/audio: Fix byteswapping of WAV AudioFormat
+Subject: [PATCH 29/36] media/audio: Fix byteswapping of WAV AudioFormat
 
 ---
  src/3rdparty/chromium/media/audio/wav_audio_handler.cc | 5 +++++
@@ -1593,7 +1593,7 @@ index 99e8a73a3..e89252c3c 100644
 From cf951e01cbbfbf4cc6df15f0589dc8056adbd540 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Fri, 5 Mar 2021 23:08:25 +0100
-Subject: [PATCH 30/35] base/allocator: Don't discard encoded NULL freelist
+Subject: [PATCH 30/36] base/allocator: Don't discard encoded NULL freelist
  pointer on BE
 
 ---
@@ -1621,7 +1621,7 @@ index daeb6d5cb..7639ed39f 100644
 From 30afe305d0f43ea2a09b0db0a0145561ca6961f7 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Mar 2021 01:07:10 +0100
-Subject: [PATCH 31/35] ui/gtk: After rendering, convert CAIRO_FORMAT_ARGB32 to
+Subject: [PATCH 31/36] ui/gtk: After rendering, convert CAIRO_FORMAT_ARGB32 to
  SkPMColor if needed
 
 ---
@@ -1717,7 +1717,7 @@ index 441dcd8c0..4803918f2 100644
 From 339c307c02db8bd4466ae60bd2f46f9f8eafc85f Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Mar 2021 19:06:21 +0100
-Subject: [PATCH 32/35] ui/base/x: Fix ColorTypeForVisual on big endian
+Subject: [PATCH 32/36] ui/base/x: Fix ColorTypeForVisual on big endian
 
 ---
  src/3rdparty/chromium/ui/base/x/x11_util.cc | 13 +++++++++++++
@@ -1760,7 +1760,7 @@ index 63bc2df4f..96b722ed2 100644
 From a0ae1c25935fb8d0607b70fc5ef981d90ef61255 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Fri, 12 Mar 2021 22:15:50 +0100
-Subject: [PATCH 33/35] blink: Remove bogus error in avif_image_decoder
+Subject: [PATCH 33/36] blink: Remove bogus error in avif_image_decoder
 
 ---
  .../platform/image-decoders/avif/avif_image_decoder.cc        | 4 ----
@@ -1788,7 +1788,7 @@ index 5acd32d47..4870a996c 100644
 From abbd92006dc80f1a3408a9a5962776d0f4d49000 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 13 Mar 2021 12:52:36 +0100
-Subject: [PATCH 34/35] pdf: Byteswap UTF-16LE strings from PDFium into native
+Subject: [PATCH 34/36] pdf: Byteswap UTF-16LE strings from PDFium into native
 
 ---
  .../pdf/pdfium/pdfium_api_string_buffer_adapter.cc  | 13 +++++++++++++
@@ -1837,7 +1837,7 @@ index 9e02e3490..869d55dad 100644
 From 32cacc4f608d0bb101cefd96970aaf22d7f3b679 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 13 Mar 2021 12:53:25 +0100
-Subject: [PATCH 35/35] ppapi: Fix GetNativeImageDataFormat()
+Subject: [PATCH 35/36] ppapi: Fix GetNativeImageDataFormat()
 
 ---
  .../chromium/ppapi/shared_impl/ppb_image_data_shared.cc       | 4 ++--
@@ -1859,6 +1859,118 @@ index 0bfd74074..c4688d4ac 100644
      return PP_IMAGEDATAFORMAT_RGBA_PREMUL;
    else
      return PP_IMAGEDATAFORMAT_BGRA_PREMUL;  // Default to something on failure
+-- 
+2.39.3
+
+
+From e63d0aa6be33210531f6d4f8afb40874f8c03955 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 11 Jul 2023 17:25:33 +0200
+Subject: [PATCH 36/36] Sandbox updates
+
+---
+ .../sandbox/linux/bpf_dsl/linux_syscall_ranges.h    |  4 ++--
+ .../linux/seccomp-bpf-helpers/sigsys_handlers.cc    | 11 ++++++++++-
+ .../linux/system_headers/ppc64_linux_syscalls.h     | 13 +++++++++++++
+ .../policy/linux/bpf_renderer_policy_linux.cc       |  3 ++-
+ .../policy/linux/bpf_utility_policy_linux.cc        |  2 +-
+ 5 files changed, 28 insertions(+), 5 deletions(-)
+
+diff --git a/src/3rdparty/chromium/sandbox/linux/bpf_dsl/linux_syscall_ranges.h b/src/3rdparty/chromium/sandbox/linux/bpf_dsl/linux_syscall_ranges.h
+index 0ca3a326f..64cd4557a 100644
+--- a/src/3rdparty/chromium/sandbox/linux/bpf_dsl/linux_syscall_ranges.h
++++ b/src/3rdparty/chromium/sandbox/linux/bpf_dsl/linux_syscall_ranges.h
+@@ -58,9 +58,9 @@
+ 
+ #elif defined(__powerpc64__)
+ 
+-#include <asm/unistd.h>
++#include <asm-generic/unistd.h>
+ #define MIN_SYSCALL 0u
+-#define MAX_PUBLIC_SYSCALL 386u
++#define MAX_PUBLIC_SYSCALL __NR_syscalls
+ #define MAX_SYSCALL MAX_PUBLIC_SYSCALL
+ 
+ #else
+diff --git a/src/3rdparty/chromium/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc b/src/3rdparty/chromium/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc
+index 13e71801f..422b2973e 100644
+--- a/src/3rdparty/chromium/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc
++++ b/src/3rdparty/chromium/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc
+@@ -362,7 +362,16 @@ intptr_t SIGSYSFstatatHandler(const struct arch_seccomp_data& args,
+   if (args.nr == __NR_fstatat_default) {
+     if (*reinterpret_cast<const char*>(args.args[1]) == '\0' &&
+         args.args[3] == static_cast<uint64_t>(AT_EMPTY_PATH)) {
+-      return syscall(__NR_fstat_default, static_cast<int>(args.args[0]),
++          int fd = static_cast<int>(args.args[0]);
++#if defined(__powerpc64__)
++      // On ppc64+glibc, some syscalls seem to accidentally negate the first
++      // parameter which causes checks against it to fail. For now, manually
++      // negate them back.
++      // TODO: Investigate the root cause and fix in glibc
++      if (fd < 0)
++        fd = -fd;
++#endif
++      return syscall(__NR_fstat_default, fd,
+                      reinterpret_cast<default_stat_struct*>(args.args[2]));
+     }
+     return -reinterpret_cast<intptr_t>(fs_denied_errno);
+diff --git a/src/3rdparty/chromium/sandbox/linux/system_headers/ppc64_linux_syscalls.h b/src/3rdparty/chromium/sandbox/linux/system_headers/ppc64_linux_syscalls.h
+index ccacffe22..b6cbeec2d 100644
+--- a/src/3rdparty/chromium/sandbox/linux/system_headers/ppc64_linux_syscalls.h
++++ b/src/3rdparty/chromium/sandbox/linux/system_headers/ppc64_linux_syscalls.h
+@@ -8,5 +8,18 @@
+ #include <asm/unistd.h>
+ 
+ //TODO: is it necessary to redefine syscall numbers for PPC64?
++// Needed for Ubuntu/Debian/Centos/RHEL:
++#if !defined(__NR_shmget)
++#define __NR_shmget     395
++#endif
++#if !defined(__NR_shmdt)
++#define __NR_shmdt      398
++#endif
++#if !defined(__NR_shmctl)
++#define __NR_shmctl     396
++#endif
++#if !defined(__NR_shmat)
++#define __NR_shmat      397
++#endif
+ 
+ #endif  // SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_SYSCALLS_H_
+diff --git a/src/3rdparty/chromium/sandbox/policy/linux/bpf_renderer_policy_linux.cc b/src/3rdparty/chromium/sandbox/policy/linux/bpf_renderer_policy_linux.cc
+index 1dc78a209..5f4084109 100644
+--- a/src/3rdparty/chromium/sandbox/policy/linux/bpf_renderer_policy_linux.cc
++++ b/src/3rdparty/chromium/sandbox/policy/linux/bpf_renderer_policy_linux.cc
+@@ -6,6 +6,7 @@
+ 
+ #include <errno.h>
+ #include <sys/ioctl.h>
++#include <termios.h>
+ 
+ #include "build/build_config.h"
+ #include "sandbox/linux/bpf_dsl/bpf_dsl.h"
+@@ -73,7 +74,7 @@ ResultExpr RendererProcessPolicy::EvaluateSyscall(int sysno) const {
+     case __NR_ftruncate64:
+ #endif
+ #if defined(__i386__) || defined(__x86_64__) || defined(__mips__) || \
+-    defined(__aarch64__)
++    defined(__aarch64__) || defined(__powerpc64__)
+     case __NR_getrlimit:
+     case __NR_setrlimit:
+ // We allow setrlimit to dynamically adjust the address space limit as
+diff --git a/src/3rdparty/chromium/sandbox/policy/linux/bpf_utility_policy_linux.cc b/src/3rdparty/chromium/sandbox/policy/linux/bpf_utility_policy_linux.cc
+index dfe9e9c55..804a2d960 100644
+--- a/src/3rdparty/chromium/sandbox/policy/linux/bpf_utility_policy_linux.cc
++++ b/src/3rdparty/chromium/sandbox/policy/linux/bpf_utility_policy_linux.cc
+@@ -34,7 +34,7 @@ ResultExpr UtilityProcessPolicy::EvaluateSyscall(int sysno) const {
+     case __NR_fdatasync:
+     case __NR_fsync:
+ #if defined(__i386__) || defined(__x86_64__) || defined(__mips__) || \
+-    defined(__aarch64__)
++    defined(__aarch64__) || defined(__powerpc64__)
+     case __NR_getrlimit:
+ #endif
+ #if defined(__i386__) || defined(__arm__)
 -- 
 2.39.3
 
