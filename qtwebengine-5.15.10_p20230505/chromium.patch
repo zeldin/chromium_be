@@ -1,0 +1,1864 @@
+From de7b7c3496ff23ad5c24fd7551849762dcf0e255 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 2 Oct 2018 23:04:47 +0200
+Subject: [PATCH 01/35] datapack: Byteswap metadata on big endian
+
+---
+ .../chromium/ui/base/resource/data_pack.cc    | 71 ++++++++++++-------
+ 1 file changed, 45 insertions(+), 26 deletions(-)
+
+diff --git a/src/3rdparty/chromium/ui/base/resource/data_pack.cc b/src/3rdparty/chromium/ui/base/resource/data_pack.cc
+index 09513e6ae..f574f51d5 100644
+--- a/src/3rdparty/chromium/ui/base/resource/data_pack.cc
++++ b/src/3rdparty/chromium/ui/base/resource/data_pack.cc
+@@ -171,16 +171,42 @@ bool MmapHasGzipHeader(const base::MemoryMappedFile* mmap) {
+   return header_status == net::GZipHeader::COMPLETE_HEADER;
+ }
+ 
++static inline uint16_t byteswap(uint16_t v) { return __builtin_bswap16(v); }
++static inline uint32_t byteswap(uint32_t v) { return __builtin_bswap32(v); }
++
++template<class T> class byteswapped_t {
++private:
++  T value;
++public:
++  inline byteswapped_t(T v) : value(byteswap(v)) { }
++  inline T operator=(T v) { value = byteswap(v); return v; }
++  inline T operator+=(T v) { v += byteswap(value); value = byteswap(v); return v; }
++  inline operator T() const { return byteswap(value); }
++};
++
++#if !defined(ARCH_CPU_LITTLE_ENDIAN)
++
++typedef byteswapped_t<uint16_t> uint16le_t;
++typedef byteswapped_t<uint32_t> uint32le_t;
++
++#else
++
++typedef uint16_t uint16le_t;
++typedef uint32_t uint32le_t;
++
++#endif
++
+ }  // namespace
+ 
+ namespace ui {
+ 
+ #pragma pack(push, 2)
+ struct DataPack::Entry {
+-  uint16_t resource_id;
+-  uint32_t file_offset;
++  uint16le_t resource_id;
++  uint32le_t file_offset;
+ 
+   static int CompareById(const void* void_key, const void* void_entry) {
++    // Key is host endian
+     uint16_t key = *reinterpret_cast<const uint16_t*>(void_key);
+     const Entry* entry = reinterpret_cast<const Entry*>(void_entry);
+     return key - entry->resource_id;
+@@ -188,10 +214,11 @@ struct DataPack::Entry {
+ };
+ 
+ struct DataPack::Alias {
+-  uint16_t resource_id;
+-  uint16_t entry_index;
++  uint16le_t resource_id;
++  uint16le_t entry_index;
+ 
+   static int CompareById(const void* void_key, const void* void_entry) {
++    // Key is host endian
+     uint16_t key = *reinterpret_cast<const uint16_t*>(void_key);
+     const Alias* entry = reinterpret_cast<const Alias*>(void_entry);
+     return key - entry->resource_id;
+@@ -339,7 +366,7 @@ bool DataPack::LoadImpl(std::unique_ptr<DataPack::DataSource> data_source) {
+   // Parse the version and check for truncated header.
+   uint32_t version = 0;
+   if (data_length > sizeof(version))
+-    version = reinterpret_cast<const uint32_t*>(data)[0];
++    version = reinterpret_cast<const uint32le_t*>(data)[0];
+   size_t header_length =
+       version == kFileFormatV4 ? kHeaderLengthV4 : kHeaderLengthV5;
+   if (version == 0 || data_length < header_length) {
+@@ -350,14 +377,14 @@ bool DataPack::LoadImpl(std::unique_ptr<DataPack::DataSource> data_source) {
+ 
+   // Parse the header of the file.
+   if (version == kFileFormatV4) {
+-    resource_count_ = reinterpret_cast<const uint32_t*>(data)[1];
++    resource_count_ = reinterpret_cast<const uint32le_t*>(data)[1];
+     alias_count_ = 0;
+     text_encoding_type_ = static_cast<TextEncodingType>(data[8]);
+   } else if (version == kFileFormatV5) {
+     // Version 5 added the alias table and changed the header format.
+     text_encoding_type_ = static_cast<TextEncodingType>(data[4]);
+-    resource_count_ = reinterpret_cast<const uint16_t*>(data)[4];
+-    alias_count_ = reinterpret_cast<const uint16_t*>(data)[5];
++    resource_count_ = reinterpret_cast<const uint16le_t*>(data)[4];
++    alias_count_ = reinterpret_cast<const uint16le_t*>(data)[5];
+   } else {
+     LOG(ERROR) << "Bad data pack version: got " << version << ", expected "
+                << kFileFormatV4 << " or " << kFileFormatV5;
+@@ -437,12 +464,6 @@ bool DataPack::HasResource(uint16_t resource_id) const {
+ 
+ bool DataPack::GetStringPiece(uint16_t resource_id,
+                               base::StringPiece* data) const {
+-  // It won't be hard to make this endian-agnostic, but it's not worth
+-  // bothering to do right now.
+-#if !defined(ARCH_CPU_LITTLE_ENDIAN)
+-#error "datapack assumes little endian"
+-#endif
+-
+   const Entry* target = LookupEntryById(resource_id);
+   if (!target)
+     return false;
+@@ -508,9 +529,6 @@ void DataPack::CheckForDuplicateResources(
+ bool DataPack::WritePack(const base::FilePath& path,
+                          const std::map<uint16_t, base::StringPiece>& resources,
+                          TextEncodingType text_encoding_type) {
+-#if !defined(ARCH_CPU_LITTLE_ENDIAN)
+-#error "datapack assumes little endian"
+-#endif
+   if (text_encoding_type != UTF8 && text_encoding_type != UTF16 &&
+       text_encoding_type != BINARY) {
+     LOG(ERROR) << "Invalid text encoding type, got " << text_encoding_type
+@@ -528,7 +546,7 @@ bool DataPack::WritePack(const base::FilePath& path,
+   if (!file.valid())
+     return false;
+ 
+-  uint32_t encoding = static_cast<uint32_t>(text_encoding_type);
++  uint32le_t encoding = static_cast<uint32le_t>(text_encoding_type);
+ 
+   // Build a list of final resource aliases, and an alias map at the same time.
+   std::vector<uint16_t> resource_ids;
+@@ -555,13 +573,14 @@ bool DataPack::WritePack(const base::FilePath& path,
+ 
+   // These values are guaranteed to fit in a uint16_t due to the earlier
+   // check of |resources_count|.
+-  const uint16_t alias_count = static_cast<uint16_t>(aliases.size());
+-  const uint16_t entry_count = static_cast<uint16_t>(resource_ids.size());
++  const uint16le_t alias_count = static_cast<uint16le_t>(aliases.size());
++  const uint16le_t entry_count = static_cast<uint16le_t>(resource_ids.size());
+   DCHECK_EQ(static_cast<size_t>(entry_count) + static_cast<size_t>(alias_count),
+             resources_count);
+ 
+-  file.Write(&kFileFormatV5, sizeof(kFileFormatV5));
+-  file.Write(&encoding, sizeof(uint32_t));
++  uint32le_t version = kFileFormatV5;
++  file.Write(&version, sizeof(version));
++  file.Write(&encoding, sizeof(uint32le_t));
+   file.Write(&entry_count, sizeof(entry_count));
+   file.Write(&alias_count, sizeof(alias_count));
+ 
+@@ -569,8 +588,8 @@ bool DataPack::WritePack(const base::FilePath& path,
+   // last item so we can compute the size of the list item.
+   const uint32_t index_length = (entry_count + 1) * sizeof(Entry);
+   const uint32_t alias_table_length = alias_count * sizeof(Alias);
+-  uint32_t data_offset = kHeaderLengthV5 + index_length + alias_table_length;
+-  for (const uint16_t resource_id : resource_ids) {
++  uint32le_t data_offset = kHeaderLengthV5 + index_length + alias_table_length;
++  for (const uint16le_t resource_id : resource_ids) {
+     file.Write(&resource_id, sizeof(resource_id));
+     file.Write(&data_offset, sizeof(data_offset));
+     data_offset += resources.find(resource_id)->second.length();
+@@ -578,13 +597,13 @@ bool DataPack::WritePack(const base::FilePath& path,
+ 
+   // We place an extra entry after the last item that allows us to read the
+   // size of the last item.
+-  const uint16_t resource_id = 0;
++  const uint16le_t resource_id = 0;
+   file.Write(&resource_id, sizeof(resource_id));
+   file.Write(&data_offset, sizeof(data_offset));
+ 
+   // Write the aliases table, if any. Note: |aliases| is an std::map,
+   // ensuring values are written in increasing order.
+-  for (const std::pair<const uint16_t, uint16_t>& alias : aliases) {
++  for (const std::pair<const uint16le_t, uint16le_t> alias : aliases) {
+     file.Write(&alias, sizeof(alias));
+   }
+ 
+-- 
+2.39.3
+
+
+From f786187dc1dfa508f9b79fa957d9787439d6e082 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 2 Oct 2018 23:15:57 +0200
+Subject: [PATCH 02/35] i18n: Use correct ICU data file
+
+---
+ src/3rdparty/chromium/base/i18n/icu_util.cc | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/3rdparty/chromium/base/i18n/icu_util.cc b/src/3rdparty/chromium/base/i18n/icu_util.cc
+index 7b2cd1eb4..9a0c918e0 100644
+--- a/src/3rdparty/chromium/base/i18n/icu_util.cc
++++ b/src/3rdparty/chromium/base/i18n/icu_util.cc
+@@ -81,8 +81,13 @@ wchar_t g_debug_icu_pf_filename[_MAX_PATH];
+ // No need to change the filename in multiple places (gyp files, windows
+ // build pkg configurations, etc). 'l' stands for Little Endian.
+ // This variable is exported through the header file.
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+ const char kIcuDataFileName[] = "icudtl.dat";
+ const char kIcuExtraDataFileName[] = "icudtl_extra.dat";
++#else
++const char kIcuDataFileName[] = "icudtb.dat";
++const char kIcuExtraDataFileName[] = "icudtb_extra.dat";
++#endif
+ 
+ // Time zone data loading.
+ // For now, only Fuchsia has a meaningful use case for this feature, so it is
+-- 
+2.39.3
+
+
+From 5c133698d00fd97b7ec37f9a74945b23201b6cae Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 2 Oct 2018 23:18:47 +0200
+Subject: [PATCH 03/35] blink: Update variable names in BE part of graphics
+ code
+
+---
+ .../renderer/platform/graphics/gpu/webgl_image_conversion.cc  | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion.cc b/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion.cc
+index c951d17db..7b6cc51d4 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion.cc
++++ b/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion.cc
+@@ -897,8 +897,8 @@ void Unpack<WebGLImageConversion::kDataFormatBGRA8, uint8_t, uint8_t>(
+   for (unsigned i = 0; i < pixels_per_row; ++i) {
+     uint32_t bgra = source32[i];
+ #if defined(ARCH_CPU_BIG_ENDIAN)
+-    uint32_t brMask = 0xff00ff00;
+-    uint32_t gaMask = 0x00ff00ff;
++    uint32_t br_mask = 0xff00ff00;
++    uint32_t ga_mask = 0x00ff00ff;
+ #else
+     uint32_t br_mask = 0x00ff00ff;
+     uint32_t ga_mask = 0xff00ff00;
+-- 
+2.39.3
+
+
+From db3dc59ee3a673c2449342b52ab0939c4edcb28b Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 2 Oct 2018 23:23:24 +0200
+Subject: [PATCH 04/35] blink: Fix SaveRegisters_ppc64 for ABIv1
+
+---
+ .../blink/renderer/platform/heap/asm/SaveRegisters_ppc64.S    | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/platform/heap/asm/SaveRegisters_ppc64.S b/src/3rdparty/chromium/third_party/blink/renderer/platform/heap/asm/SaveRegisters_ppc64.S
+index ef6c3326e..5670453fc 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/platform/heap/asm/SaveRegisters_ppc64.S
++++ b/src/3rdparty/chromium/third_party/blink/renderer/platform/heap/asm/SaveRegisters_ppc64.S
+@@ -39,6 +39,10 @@ PushAllRegisters:
+         // Pass the first argument untouched in r3 and the
+         // stack pointer to the callback.
+         std 2, 24(1)
++#if _CALL_ELF == 1
++	ld 2, 8(4)
++	ld 4, 0(4)
++#endif
+         mtctr 4
+         mr 12, 4
+         mr 4, 1
+-- 
+2.39.3
+
+
+From 328c5576ffae23e68e363866574d8dda7e420718 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 2 Oct 2018 23:58:23 +0200
+Subject: [PATCH 05/35] modp_b64: Set WORDS_BIGENDIAN on big endian
+
+---
+ src/3rdparty/chromium/third_party/modp_b64/BUILD.gn | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/3rdparty/chromium/third_party/modp_b64/BUILD.gn b/src/3rdparty/chromium/third_party/modp_b64/BUILD.gn
+index 539abe158..981d8b65b 100644
+--- a/src/3rdparty/chromium/third_party/modp_b64/BUILD.gn
++++ b/src/3rdparty/chromium/third_party/modp_b64/BUILD.gn
+@@ -2,10 +2,16 @@
+ # Use of this source code is governed by a BSD-style license that can be
+ # found in the LICENSE file.
+ 
++import("//build/config/host_byteorder.gni")
++
+ static_library("modp_b64") {
+   sources = [
+     "modp_b64.cc",
+     "modp_b64.h",
+     "modp_b64_data.h",
+   ]
++
++  if (host_byteorder == "big") {
++    defines = [ "WORDS_BIGENDIAN=1" ]
++  }
+ }
+-- 
+2.39.3
+
+
+From c03bcf92913702ee62a057fa84f1339cf1848817 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 2 Oct 2018 23:59:08 +0200
+Subject: [PATCH 06/35] modp_b64: Fix size datatype for modp_b64_decode on big
+ endian
+
+---
+ src/3rdparty/chromium/third_party/modp_b64/modp_b64.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/third_party/modp_b64/modp_b64.cc b/src/3rdparty/chromium/third_party/modp_b64/modp_b64.cc
+index fdb8a40ec..a70b08090 100644
+--- a/src/3rdparty/chromium/third_party/modp_b64/modp_b64.cc
++++ b/src/3rdparty/chromium/third_party/modp_b64/modp_b64.cc
+@@ -118,7 +118,7 @@ size_t modp_b64_encode(char* dest, const char* str, size_t len)
+ }
+ 
+ #ifdef WORDS_BIGENDIAN   /* BIG ENDIAN -- SUN / IBM / MOTOROLA */
+-int modp_b64_decode(char* dest, const char* src, int len)
++size_t modp_b64_decode(char* dest, const char* src, size_t len)
+ {
+     if (len == 0) return 0;
+ 
+-- 
+2.39.3
+
+
+From 9e6ce70f9ddfff7f684c00a736c7e2485b7c02a9 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 11 Nov 2018 16:55:43 +0100
+Subject: [PATCH 07/35] pickle: Use same scalar size in ReadBool as in
+ WriteBool
+
+---
+ src/3rdparty/chromium/base/pickle.cc | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/base/pickle.cc b/src/3rdparty/chromium/base/pickle.cc
+index 413181844..1165af598 100644
+--- a/src/3rdparty/chromium/base/pickle.cc
++++ b/src/3rdparty/chromium/base/pickle.cc
+@@ -82,7 +82,12 @@ inline const char* PickleIterator::GetReadPointerAndAdvance(
+ }
+ 
+ bool PickleIterator::ReadBool(bool* result) {
+-  return ReadBuiltinType(result);
++  int int_result;
++  if (ReadBuiltinType(&int_result)) {
++    *result = static_cast<bool>(int_result);
++    return true;
++  } else
++    return false;
+ }
+ 
+ bool PickleIterator::ReadInt(int* result) {
+-- 
+2.39.3
+
+
+From 1790c269adf6fc51140259a20fd2483c6b630dfb Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Mon, 12 Nov 2018 19:49:39 +0100
+Subject: [PATCH 08/35] sha1: Remove byteswaps on big endian
+
+These byteswaps are only needed on little endian.
+---
+ src/3rdparty/chromium/base/hash/sha1.cc | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/3rdparty/chromium/base/hash/sha1.cc b/src/3rdparty/chromium/base/hash/sha1.cc
+index 8e9de1591..120598eae 100644
+--- a/src/3rdparty/chromium/base/hash/sha1.cc
++++ b/src/3rdparty/chromium/base/hash/sha1.cc
+@@ -106,8 +106,10 @@ void SecureHashAlgorithm::Final() {
+   Pad();
+   Process();
+ 
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+   for (auto& t : H)
+     t = ByteSwap(t);
++#endif
+ }
+ 
+ void SecureHashAlgorithm::Update(const void* data, size_t nbytes) {
+@@ -153,8 +155,10 @@ void SecureHashAlgorithm::Process() {
+   //
+   // W and M are in a union, so no need to memcpy.
+   // memcpy(W, M, sizeof(M));
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+   for (t = 0; t < 16; ++t)
+     W[t] = ByteSwap(W[t]);
++#endif
+ 
+   // b.
+   for (t = 16; t < 80; ++t)
+-- 
+2.39.3
+
+
+From e4d86ccc54bfd0b668e3d241f8397e9bd7c1e8f3 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Mon, 12 Nov 2018 19:51:58 +0100
+Subject: [PATCH 09/35] unittest: Fix some tests exposing endianness to work on
+ BE
+
+---
+ .../base/memory/shared_memory_mapping_unittest.cc   | 13 +++++++------
+ .../chromium/base/metrics/bucket_ranges_unittest.cc |  9 +++++++++
+ .../strings/string_number_conversions_unittest.cc   |  9 +++++++++
+ 3 files changed, 25 insertions(+), 6 deletions(-)
+
+diff --git a/src/3rdparty/chromium/base/memory/shared_memory_mapping_unittest.cc b/src/3rdparty/chromium/base/memory/shared_memory_mapping_unittest.cc
+index 48fba7454..fb1abcf48 100644
+--- a/src/3rdparty/chromium/base/memory/shared_memory_mapping_unittest.cc
++++ b/src/3rdparty/chromium/base/memory/shared_memory_mapping_unittest.cc
+@@ -16,6 +16,7 @@
+ #include "build/build_config.h"
+ #include "testing/gmock/include/gmock/gmock.h"
+ #include "testing/gtest/include/gtest/gtest.h"
++#include "base/sys_byteorder.h"
+ 
+ namespace base {
+ 
+@@ -73,8 +74,8 @@ TEST_F(SharedMemoryMappingTest, SpanWithAutoDeducedElementCount) {
+ 
+   for (size_t i = 0; i < write_span.size(); ++i)
+     write_span[i] = i + 1;
+-  EXPECT_EQ(0x04030201u, read_span[0]);
+-  EXPECT_EQ(0x08070605u, read_span[1]);
++  EXPECT_EQ(HostToNet32(0x01020304u), read_span[0]);
++  EXPECT_EQ(HostToNet32(0x05060708u), read_span[1]);
+ }
+ 
+ TEST_F(SharedMemoryMappingTest, SpanWithExplicitElementCount) {
+@@ -99,13 +100,13 @@ TEST_F(SharedMemoryMappingTest, SpanWithExplicitElementCount) {
+ 
+   for (size_t i = 0; i < write_span.size(); ++i)
+     write_span[i] = i + 1;
+-  EXPECT_EQ(0x04030201u, read_span[0]);
+-  EXPECT_EQ(0x08070605u, read_span[1]);
+-  EXPECT_EQ(0x04030201u, read_span_2[0]);
++  EXPECT_EQ(HostToNet32(0x01020304u), read_span[0]);
++  EXPECT_EQ(HostToNet32(0x05060708u), read_span[1]);
++  EXPECT_EQ(HostToNet32(0x01020304u), read_span_2[0]);
+ 
+   std::fill(write_span_2.begin(), write_span_2.end(), 0);
+   EXPECT_EQ(0u, read_span[0]);
+-  EXPECT_EQ(0x08070605u, read_span[1]);
++  EXPECT_EQ(HostToNet32(0x05060708u), read_span[1]);
+   EXPECT_EQ(0u, read_span_2[0]);
+ }
+ 
+diff --git a/src/3rdparty/chromium/base/metrics/bucket_ranges_unittest.cc b/src/3rdparty/chromium/base/metrics/bucket_ranges_unittest.cc
+index cabc1707c..91bbb0822 100644
+--- a/src/3rdparty/chromium/base/metrics/bucket_ranges_unittest.cc
++++ b/src/3rdparty/chromium/base/metrics/bucket_ranges_unittest.cc
+@@ -7,6 +7,7 @@
+ #include <stdint.h>
+ 
+ #include "testing/gtest/include/gtest/gtest.h"
++#include "base/sys_byteorder.h"
+ 
+ namespace base {
+ namespace {
+@@ -64,13 +65,21 @@ TEST(BucketRangesTest, Checksum) {
+   ranges.set_range(2, 2);
+ 
+   ranges.ResetChecksum();
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+   EXPECT_EQ(289217253u, ranges.checksum());
++#else
++  EXPECT_EQ(2767231596u, ranges.checksum());
++#endif
+ 
+   ranges.set_range(2, 3);
+   EXPECT_FALSE(ranges.HasValidChecksum());
+ 
+   ranges.ResetChecksum();
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+   EXPECT_EQ(2843835776u, ranges.checksum());
++#else
++  EXPECT_EQ(3556223738u, ranges.checksum());
++#endif
+   EXPECT_TRUE(ranges.HasValidChecksum());
+ }
+ 
+diff --git a/src/3rdparty/chromium/base/strings/string_number_conversions_unittest.cc b/src/3rdparty/chromium/base/strings/string_number_conversions_unittest.cc
+index 69ab344dd..94045b913 100644
+--- a/src/3rdparty/chromium/base/strings/string_number_conversions_unittest.cc
++++ b/src/3rdparty/chromium/base/strings/string_number_conversions_unittest.cc
+@@ -899,12 +899,21 @@ TEST(StringNumberConversionsTest, DoubleToString) {
+   }
+ 
+   // The following two values were seen in crashes in the wild.
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+   const char input_bytes[8] = {0, 0, 0, 0, '\xee', '\x6d', '\x73', '\x42'};
++#else
++  const char input_bytes[8] = {'\x42', '\x73', '\x6d', '\xee', 0, 0, 0, 0};
++#endif
+   double input = 0;
+   memcpy(&input, input_bytes, base::size(input_bytes));
+   EXPECT_EQ("1.335179083776e+12", NumberToString(input));
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+   const char input_bytes2[8] = {0,      0,      0,      '\xa0',
+                                 '\xda', '\x6c', '\x73', '\x42'};
++#else
++  const char input_bytes2[8] =
++      {'\x42', '\x73', '\x6c', '\xda', '\xa0', 0, 0, 0};
++#endif
+   input = 0;
+   memcpy(&input, input_bytes2, base::size(input_bytes2));
+   EXPECT_EQ("1.33489033216e+12", NumberToString(input));
+-- 
+2.39.3
+
+
+From 25220d27a0c3a9c9119effbecce3e81b10e87be8 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 17 Feb 2019 16:43:20 +0100
+Subject: [PATCH 10/35] V4Rice: Fix LE dependency
+
+---
+ .../components/safe_browsing/core/db/v4_rice.cc        |  9 +++------
+ .../safe_browsing/core/db/v4_rice_unittest.cc          | 10 ++++++++--
+ 2 files changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/src/3rdparty/chromium/components/safe_browsing/core/db/v4_rice.cc b/src/3rdparty/chromium/components/safe_browsing/core/db/v4_rice.cc
+index 7a837fdc5..9a278a377 100644
+--- a/src/3rdparty/chromium/components/safe_browsing/core/db/v4_rice.cc
++++ b/src/3rdparty/chromium/components/safe_browsing/core/db/v4_rice.cc
+@@ -9,6 +9,7 @@
+ #include "base/notreached.h"
+ #include "base/numerics/safe_math.h"
+ #include "base/strings/stringprintf.h"
++#include "base/sys_byteorder.h"
+ #include "build/build_config.h"
+ #include "components/safe_browsing/core/db/v4_rice.h"
+ 
+@@ -22,10 +23,6 @@ using ::google::protobuf::RepeatedField;
+ using ::google::protobuf::int32;
+ using ::google::protobuf::int64;
+ 
+-#if !defined(ARCH_CPU_LITTLE_ENDIAN) || (ARCH_CPU_LITTLE_ENDIAN != 1)
+-#error The code below assumes little-endianness.
+-#endif
+-
+ namespace safe_browsing {
+ 
+ namespace {
+@@ -118,7 +115,7 @@ V4DecodeResult V4RiceDecoder::DecodePrefixes(const int64 first_value,
+   out->reserve((num_entries + 1));
+ 
+   base::CheckedNumeric<uint32_t> last_value(first_value);
+-  out->push_back(htonl(last_value.ValueOrDie()));
++  out->push_back(base::ByteSwap(static_cast<uint32_t>(last_value.ValueOrDie())));
+ 
+   if (num_entries > 0) {
+     V4RiceDecoder decoder(rice_parameter, num_entries, encoded_data);
+@@ -137,7 +134,7 @@ V4DecodeResult V4RiceDecoder::DecodePrefixes(const int64 first_value,
+ 
+       // This flipping is done so that the decoded uint32 is interpreted
+       // correcly as a string of 4 bytes.
+-      out->push_back(htonl(last_value.ValueOrDie()));
++      out->push_back(base::ByteSwap(static_cast<uint32_t>(last_value.ValueOrDie())));
+     }
+   }
+ 
+diff --git a/src/3rdparty/chromium/components/safe_browsing/core/db/v4_rice_unittest.cc b/src/3rdparty/chromium/components/safe_browsing/core/db/v4_rice_unittest.cc
+index 60bcab907..a91ed2447 100644
+--- a/src/3rdparty/chromium/components/safe_browsing/core/db/v4_rice_unittest.cc
++++ b/src/3rdparty/chromium/components/safe_browsing/core/db/v4_rice_unittest.cc
+@@ -6,6 +6,12 @@
+ #include "base/logging.h"
+ #include "testing/platform_test.h"
+ 
++#if defined(OS_WIN)
++#include <winsock2.h>
++#elif defined(OS_POSIX)
++#include <arpa/inet.h>
++#endif
++
+ using ::google::protobuf::RepeatedField;
+ using ::google::protobuf::int32;
+ 
+@@ -247,7 +253,7 @@ TEST_F(V4RiceTest, TestDecoderPrefixesWithOneValue) {
+   EXPECT_EQ(DECODE_SUCCESS,
+             V4RiceDecoder::DecodePrefixes(0x69F67F51u, 2, 0, "", &out));
+   EXPECT_EQ(1u, out.size());
+-  EXPECT_EQ(0x69F67F51u, out[0]);
++  EXPECT_EQ(htonl(0x517FF669u), out[0]);
+ }
+ 
+ TEST_F(V4RiceTest, TestDecoderPrefixesWithMultipleValues) {
+@@ -256,7 +262,7 @@ TEST_F(V4RiceTest, TestDecoderPrefixesWithMultipleValues) {
+             V4RiceDecoder::DecodePrefixes(
+                 5, 28, 3, "\xbf\xa8\x3f\xfb\xf\xf\x5e\x27\xe6\xc3\x1d\xc6\x38",
+                 &out));
+-  std::vector<uint32_t> expected = {5, 0xad934c0cu, 0x6ff67f56u, 0x81316fceu};
++  std::vector<uint32_t> expected = {htonl(0x05000000), htonl(0x0c4c93adu), htonl(0x567ff66fu), htonl(0xce6f3181u)};
+   EXPECT_EQ(expected.size(), out.size());
+   for (unsigned i = 0; i < expected.size(); i++) {
+     EXPECT_EQ(expected[i], out[i]);
+-- 
+2.39.3
+
+
+From d38031f9f42eeccc2bf0b6a5d89b68fbc5cd72d2 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 17 Feb 2019 17:01:13 +0100
+Subject: [PATCH 11/35] url::Canonicalize: Remove unportable reinterpret_cast
+
+---
+ src/3rdparty/chromium/url/url_canon_host.cc    | 3 +--
+ src/3rdparty/chromium/url/url_canon_internal.h | 4 ++--
+ 2 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/src/3rdparty/chromium/url/url_canon_host.cc b/src/3rdparty/chromium/url/url_canon_host.cc
+index 19cd0e61f..f0e149f01 100644
+--- a/src/3rdparty/chromium/url/url_canon_host.cc
++++ b/src/3rdparty/chromium/url/url_canon_host.cc
+@@ -135,8 +135,7 @@ bool DoSimpleHost(const INCHAR* host,
+     if (source == '%') {
+       // Unescape first, if possible.
+       // Source will be used only if decode operation was successful.
+-      if (!DecodeEscaped(host, &i, host_len,
+-                         reinterpret_cast<unsigned char*>(&source))) {
++      if (!DecodeEscaped(host, &i, host_len, &source)) {
+         // Invalid escaped character. There is nothing that can make this
+         // host valid. We append an escaped percent so the URL looks reasonable
+         // and mark as failed.
+diff --git a/src/3rdparty/chromium/url/url_canon_internal.h b/src/3rdparty/chromium/url/url_canon_internal.h
+index 53ae8dd3f..d48421f19 100644
+--- a/src/3rdparty/chromium/url/url_canon_internal.h
++++ b/src/3rdparty/chromium/url/url_canon_internal.h
+@@ -305,9 +305,9 @@ inline bool Is8BitChar(base::char16 c) {
+   return c <= 255;
+ }
+ 
+-template<typename CHAR>
++template<typename CHAR, typename DST>
+ inline bool DecodeEscaped(const CHAR* spec, int* begin, int end,
+-                          unsigned char* unescaped_value) {
++                          DST* unescaped_value) {
+   if (*begin + 3 > end ||
+       !Is8BitChar(spec[*begin + 1]) || !Is8BitChar(spec[*begin + 2])) {
+     // Invalid escape sequence because there's not enough room, or the
+-- 
+2.39.3
+
+
+From c9097a930e603b73e9f1088b4ddf234082f1af74 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 23 Feb 2019 14:35:04 +0100
+Subject: [PATCH 12/35] CRLSet: Fix LE dependency
+
+---
+ src/3rdparty/chromium/net/cert/crl_set.cc | 14 +++-----------
+ 1 file changed, 3 insertions(+), 11 deletions(-)
+
+diff --git a/src/3rdparty/chromium/net/cert/crl_set.cc b/src/3rdparty/chromium/net/cert/crl_set.cc
+index 4a99f6eb6..2d4cf85fa 100644
+--- a/src/3rdparty/chromium/net/cert/crl_set.cc
++++ b/src/3rdparty/chromium/net/cert/crl_set.cc
+@@ -8,6 +8,7 @@
+ 
+ #include "base/base64.h"
+ #include "base/json/json_reader.h"
++#include "base/sys_byteorder.h"
+ #include "base/time/time.h"
+ #include "base/trace_event/trace_event.h"
+ #include "base/values.h"
+@@ -57,9 +58,9 @@ base::DictionaryValue* ReadHeader(base::StringPiece* data) {
+   uint16_t header_len;
+   if (data->size() < sizeof(header_len))
+     return nullptr;
+-  // Assumes little-endian.
+   memcpy(&header_len, data->data(), sizeof(header_len));
+   data->remove_prefix(sizeof(header_len));
++  header_len = base::ByteSwapToLE16(header_len);
+ 
+   if (data->size() < header_len)
+     return nullptr;
+@@ -92,9 +93,9 @@ bool ReadCRL(base::StringPiece* data,
+   uint32_t num_serials;
+   if (data->size() < sizeof(num_serials))
+     return false;
+-  // Assumes little endian.
+   memcpy(&num_serials, data->data(), sizeof(num_serials));
+   data->remove_prefix(sizeof(num_serials));
++  num_serials = base::ByteSwapToLE32(num_serials);
+ 
+   if (num_serials > 32 * 1024 * 1024)  // Sanity check.
+     return false;
+@@ -205,15 +206,6 @@ CRLSet::~CRLSet() = default;
+ // static
+ bool CRLSet::Parse(base::StringPiece data, scoped_refptr<CRLSet>* out_crl_set) {
+   TRACE_EVENT0(NetTracingCategory(), "CRLSet::Parse");
+-// Other parts of Chrome assume that we're little endian, so we don't lose
+-// anything by doing this.
+-#if defined(__BYTE_ORDER)
+-  // Linux check
+-  static_assert(__BYTE_ORDER == __LITTLE_ENDIAN, "assumes little endian");
+-#elif defined(__BIG_ENDIAN__)
+-// Mac check
+-#error assumes little endian
+-#endif
+ 
+   std::unique_ptr<base::DictionaryValue> header_dict(ReadHeader(&data));
+   if (!header_dict.get())
+-- 
+2.39.3
+
+
+From cb756254f60280492e86de24dd70089099837c4d Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 23 Feb 2019 22:33:02 +0100
+Subject: [PATCH 13/35] crc32c: Fix definition of BYTE_ORDER_BIG_ENDIAN
+
+---
+ src/3rdparty/chromium/third_party/crc32c/BUILD.gn | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/crc32c/BUILD.gn b/src/3rdparty/chromium/third_party/crc32c/BUILD.gn
+index 5ea81e47c..274777983 100644
+--- a/src/3rdparty/chromium/third_party/crc32c/BUILD.gn
++++ b/src/3rdparty/chromium/third_party/crc32c/BUILD.gn
+@@ -16,13 +16,10 @@ config("crc32c_config") {
+   ]
+ 
+   defines = [
+-    "BYTE_ORDER_BIG_ENDIAN=0",
++    "BYTE_ORDER_BIG_ENDIAN=__BYTE_ORDER__==__ORDER_BIG_ENDIAN__",
+     "CRC32C_TESTS_BUILT_WITH_GLOG=0",
+   ]
+ 
+-  # If we ever support big-endian builds, add logic to conditionally enable
+-  # BYTE_ORDER_BIG_ENDIAN.
+-
+   if (target_cpu == "x86" || target_cpu == "x64") {
+     defines += [
+       "HAVE_MM_PREFETCH=1",
+-- 
+2.39.3
+
+
+From e96eec0cb33ed5804b5184801011a9e21d1d0144 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Mar 2019 20:26:32 +0100
+Subject: [PATCH 14/35] blink: handle pixel format selection independent of
+ byteorder
+
+---
+ .../image-decoders/jpeg/jpeg_image_decoder.cc | 21 ++++++++++++-------
+ .../image-decoders/webp/webp_image_decoder.cc | 12 +++++------
+ 2 files changed, 20 insertions(+), 13 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/jpeg/jpeg_image_decoder.cc b/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/jpeg/jpeg_image_decoder.cc
+index 33e169005..8ab66b321 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/jpeg/jpeg_image_decoder.cc
++++ b/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/jpeg/jpeg_image_decoder.cc
+@@ -54,23 +54,30 @@ extern "C" {
+ #include <setjmp.h>
+ }
+ 
+-#if defined(ARCH_CPU_BIG_ENDIAN)
+-#error Blink assumes a little-endian target.
+-#endif
+-
+ #if defined(JCS_ALPHA_EXTENSIONS)
+ #define TURBO_JPEG_RGB_SWIZZLE
+-#if SK_B32_SHIFT  // Output little-endian RGBA pixels (Android).
++#if SK_PMCOLOR_BYTE_ORDER(R, G, B, A)
+ inline J_COLOR_SPACE rgbOutputColorSpace() {
+   return JCS_EXT_RGBA;
+ }
+-#else  // Output little-endian BGRA pixels.
++#elif SK_PMCOLOR_BYTE_ORDER(B, G, R, A)
+ inline J_COLOR_SPACE rgbOutputColorSpace() {
+   return JCS_EXT_BGRA;
+ }
++#elif SK_PMCOLOR_BYTE_ORDER(A, R, G, B)
++inline J_COLOR_SPACE rgbOutputColorSpace() {
++  return JCS_EXT_ARGB;
++}
++#elif SK_PMCOLOR_BYTE_ORDER(A, B, G, R)
++inline J_COLOR_SPACE rgbOutputColorSpace() {
++  return JCS_EXT_ABGR;
++}
++#else
++#error Component order not supported by libjpeg_turbo
+ #endif
+ inline bool turboSwizzled(J_COLOR_SPACE colorSpace) {
+-  return colorSpace == JCS_EXT_RGBA || colorSpace == JCS_EXT_BGRA;
++  return colorSpace == JCS_EXT_RGBA || colorSpace == JCS_EXT_BGRA ||
++    colorSpace == JCS_EXT_ABGR || colorSpace == JCS_EXT_ARGB;
+ }
+ #else
+ inline J_COLOR_SPACE rgbOutputColorSpace() {
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/webp/webp_image_decoder.cc b/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/webp/webp_image_decoder.cc
+index 931ca2d0c..8efcc7356 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/webp/webp_image_decoder.cc
++++ b/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/webp/webp_image_decoder.cc
+@@ -37,10 +37,6 @@
+ #include "third_party/blink/renderer/platform/wtf/wtf.h"
+ #include "third_party/skia/include/core/SkData.h"
+ 
+-#if defined(ARCH_CPU_BIG_ENDIAN)
+-#error Blink assumes a little-endian target.
+-#endif
+-
+ namespace {
+ 
+ // Returns two point ranges (<left, width> pairs) at row |canvasY| which belong
+@@ -225,10 +221,14 @@ WEBP_CSP_MODE WEBPImageDecoder::RGBOutputMode() {
+     return MODE_BGRA;
+   }
+   bool premultiply = (format_flags_ & ALPHA_FLAG) && premultiply_alpha_;
+-#if SK_B32_SHIFT  // Output little-endian RGBA pixels (Android)
++#if SK_PMCOLOR_BYTE_ORDER(R, G, B, A) 
+   return premultiply ? MODE_rgbA : MODE_RGBA;
+-#else  // Output little-endian BGRA pixels.
++#elif SK_PMCOLOR_BYTE_ORDER(B, G, R, A) 
+   return premultiply ? MODE_bgrA : MODE_BGRA;
++#elif SK_PMCOLOR_BYTE_ORDER(A, R, G, B)
++  return premultiply ? MODE_Argb : MODE_ARGB;
++#else
++#error Component order not supported by libwebp
+ #endif
+ }
+ 
+-- 
+2.39.3
+
+
+From b2fa6a544ebb3742b256b56003fb9adecddf0822 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 27 Mar 2019 21:32:08 +0100
+Subject: [PATCH 15/35] blink: Fix BMP header parsing on big endian
+
+---
+ .../renderer/platform/image-decoders/bmp/bmp_image_reader.h  | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/bmp/bmp_image_reader.h b/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/bmp/bmp_image_reader.h
+index 1181dff48..6c7f209e0 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/bmp/bmp_image_reader.h
++++ b/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/bmp/bmp_image_reader.h
+@@ -37,6 +37,7 @@
+ #include "third_party/blink/renderer/platform/image-decoders/fast_shared_buffer_reader.h"
+ #include "third_party/blink/renderer/platform/image-decoders/image_decoder.h"
+ #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
++#include "base/sys_byteorder.h"
+ 
+ namespace blink {
+ 
+@@ -49,11 +50,11 @@ class PLATFORM_EXPORT BMPImageReader final {
+   // Read a value from |buffer|, converting to an int assuming little
+   // endianness
+   static inline uint16_t ReadUint16(const char* buffer) {
+-    return *reinterpret_cast<const uint16_t*>(buffer);
++    return base::ByteSwapToLE16(*reinterpret_cast<const uint16_t*>(buffer));
+   }
+ 
+   static inline uint32_t ReadUint32(const char* buffer) {
+-    return *reinterpret_cast<const uint32_t*>(buffer);
++    return base::ByteSwapToLE32(*reinterpret_cast<const uint32_t*>(buffer));
+   }
+ 
+   // |parent| is the decoder that owns us.
+-- 
+2.39.3
+
+
+From 5e57ed02cf25b788b3ea965754bc97ef42efe837 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 27 Mar 2019 21:33:04 +0100
+Subject: [PATCH 16/35] blink: Fix alpha check in GC tests
+
+---
+ .../blink/renderer/platform/graphics/graphics_context_test.cc | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/graphics_context_test.cc b/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/graphics_context_test.cc
+index 36b606a3f..3ea34aa52 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/graphics_context_test.cc
++++ b/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/graphics_context_test.cc
+@@ -54,7 +54,7 @@ namespace {
+   {                                                              \
+     for (int y = opaqueRect.Y(); y < opaqueRect.MaxY(); ++y)     \
+       for (int x = opaqueRect.X(); x < opaqueRect.MaxX(); ++x) { \
+-        int alpha = *bitmap.getAddr32(x, y) >> 24;               \
++        int alpha = SkGetPackedA32(*bitmap.getAddr32(x, y));	 \
+         EXPECT_EQ(255, alpha);                                   \
+       }                                                          \
+   }
+@@ -63,7 +63,7 @@ namespace {
+   {                                                           \
+     for (int y = 0; y < bitmap.height(); ++y)                 \
+       for (int x = 0; x < bitmap.width(); ++x) {              \
+-        int alpha = *bitmap.getAddr32(x, y) >> 24;            \
++        int alpha = SkGetPackedA32(*bitmap.getAddr32(x, y));  \
+         bool opaque = opaqueRect.Contains(x, y);              \
+         EXPECT_EQ(opaque, alpha == 255);                      \
+       }                                                       \
+-- 
+2.39.3
+
+
+From 8c487f52c3e193d40eddc0b0ce0e8fab2beb8a80 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 27 Mar 2019 21:34:12 +0100
+Subject: [PATCH 17/35] blink: Fix typo in WebGL image conversion test
+
+---
+ .../platform/graphics/gpu/webgl_image_conversion_test.cc    | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion_test.cc b/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion_test.cc
+index e31561585..7f3599ca0 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion_test.cc
++++ b/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion_test.cc
+@@ -76,9 +76,9 @@ TEST_F(WebGLImageConversionTest, convertBGRA8toRGBA8) {
+                              0x34567888, 0x12345678, 0x34567888,
+                              0x12345678, 0x34567888, 0x12345678};
+ #if defined(ARCH_CPU_BIG_ENDIAN)
+-  uint32_t expectedData[9] = {0x56341278, 0x78563488, 0x56341278,
+-                              0x78563488, 0x56341278, 0x78563488,
+-                              0x56341278, 0x78563488, 0x56341278};
++  uint32_t expected_data[9] = {0x56341278, 0x78563488, 0x56341278,
++			       0x78563488, 0x56341278, 0x78563488,
++			       0x56341278, 0x78563488, 0x56341278};
+ #else
+   uint32_t expected_data[9] = {0x12785634, 0x34887856, 0x12785634,
+                                0x34887856, 0x12785634, 0x34887856,
+-- 
+2.39.3
+
+
+From 3e00142543b67754da9651e1c5b1ec9e79f4c5f5 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 6 Apr 2019 15:43:20 +0200
+Subject: [PATCH 18/35] blink: Fix bizarre endianness dependency in TensorFlow
+ output
+
+---
+ .../graphics/darkmode/darkmode_classifier.cc  | 53 ++++++++-----------
+ 1 file changed, 21 insertions(+), 32 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/darkmode/darkmode_classifier.cc b/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/darkmode/darkmode_classifier.cc
+index 858e6a14d..b184f4f91 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/darkmode/darkmode_classifier.cc
++++ b/src/3rdparty/chromium/third_party/blink/renderer/platform/graphics/darkmode/darkmode_classifier.cc
+@@ -1067,58 +1067,47 @@ void DequantizeMinFirst(const int32_t rank,
+ 
+ // -----------------------------------------------------------------------------
+ // CONSTANTS
+-// Note that for now, endianness of the target machine needs to match that of
+-// the one training was performed on.
+ // -----------------------------------------------------------------------------
+ const int32_t dnn_hiddenlayer_0_weights_part_0_shape[2] = {4, 10};
+ const union {
+-  uint8_t bytes[160];
+   float values[40];
+ } dnn_hiddenlayer_0_weights_part_0 = {{
+-    0xbc, 0x22, 0x0a, 0xbf, 0xb4, 0x46, 0x8c, 0x3f, 0xba, 0x31, 0x34, 0xbe,
+-    0x4c, 0x65, 0xdb, 0xbe, 0xf0, 0x54, 0x5e, 0xbe, 0xc1, 0x5d, 0xb3, 0x3f,
+-    0xf4, 0xe6, 0x15, 0xbf, 0x05, 0xc6, 0x34, 0xbf, 0xc0, 0x37, 0x7e, 0xbd,
+-    0x6c, 0x35, 0x0b, 0xbf, 0xca, 0x53, 0x26, 0xbf, 0x58, 0xb4, 0x87, 0x3f,
+-    0x37, 0xee, 0x39, 0xbf, 0xda, 0xfa, 0xf9, 0xbe, 0x97, 0xc1, 0x06, 0xbf,
+-    0xf9, 0x4e, 0x81, 0x3f, 0xb2, 0x44, 0x85, 0xbf, 0x7f, 0x98, 0x7c, 0x3d,
+-    0x15, 0x26, 0xbc, 0xbe, 0x5c, 0x48, 0x05, 0x3f, 0xc8, 0xaa, 0xa1, 0xbd,
+-    0x35, 0xb3, 0x43, 0xbe, 0xeb, 0x46, 0x91, 0x3f, 0x80, 0x71, 0xe3, 0x3c,
+-    0xd1, 0x98, 0x79, 0x3f, 0x3c, 0xd0, 0x0d, 0xbf, 0x1e, 0x02, 0xd3, 0x3e,
+-    0x5d, 0x4b, 0xa2, 0xbf, 0x68, 0xac, 0xaa, 0xbd, 0xf8, 0xe1, 0x75, 0x3e,
+-    0x4a, 0x9c, 0x27, 0xbe, 0xf8, 0xae, 0xb2, 0xbe, 0x7f, 0x9d, 0x91, 0x3f,
+-    0x1e, 0x8b, 0xa8, 0xbe, 0x35, 0x7e, 0xb2, 0x3f, 0xbe, 0x8c, 0xd3, 0xbe,
+-    0xf9, 0xcd, 0xb5, 0x3f, 0xa1, 0x50, 0xaa, 0x3f, 0xe4, 0x6d, 0xdd, 0xbe,
+-    0x0d, 0xce, 0xd3, 0xbe,
++     -0.539592504501343,   1.09590768814087, -0.175970941781998, -0.428507208824158,
++     -0.217120885848999,   1.40129864215851,   -0.5855553150177, -0.706146538257599,
++    -0.0620648860931396, -0.543783903121948, -0.649716019630432,   1.06019115447998,
++     -0.726291120052338, -0.488241970539093, -0.526391446590424,   1.01022255420685,
++      -1.04115891456604, 0.0616688691079617, -0.367478042840958,  0.520635366439819,
++    -0.0789390206336975,  -0.19111330807209,   1.13497674465179, 0.0277640819549561,
++      0.974988043308258, -0.553958654403687,  0.412125527858734,   -1.2679249048233,
++    -0.0833366513252258,  0.240119814872742, -0.163682132959366,  -0.34899115562439,
++        1.1376188993454, -0.329186379909515,    1.3944765329361, -0.413183152675629,
++       1.42034828662872,   1.33058559894562, -0.432479023933411, -0.413681417703629
+ }};
+ const int32_t dnn_hiddenlayer_0_biases_part_0_shape[1] = {10};
+ const union {
+-  uint8_t bytes[40];
+   float values[10];
+ } dnn_hiddenlayer_0_biases_part_0 = {{
+-    0x00, 0x00, 0x00, 0x00, 0xbf, 0x6a, 0x53, 0x3e, 0xd3, 0xc1,
+-    0xd0, 0x3e, 0x00, 0x00, 0x00, 0x00, 0xb6, 0xd8, 0xc0, 0x3e,
+-    0xca, 0xe7, 0x35, 0x3e, 0x23, 0xa5, 0x44, 0x3f, 0x61, 0xfd,
+-    0xd2, 0x3e, 0x00, 0x00, 0x00, 0x00, 0xb6, 0xe0, 0x43, 0x3c,
++                    0.0,  0.206461891531944,
++      0.407728761434555,                0.0,
++      0.376653373241425,  0.177642017602921,
++       0.76814478635788,  0.412089377641678,
++                    0.0, 0.0119554307311773
+ }};
+ const int32_t dnn_logits_biases_part_0_shape[1] = {1};
+ const union {
+-  uint8_t bytes[4];
+   float values[1];
+ } dnn_logits_biases_part_0 = {{
+-    0x75,
+-    0xca,
+-    0xd7,
+-    0xbe,
++    -0.421466499567032
+ }};
+ const int32_t dnn_logits_weights_part_0_shape[2] = {10, 1};
+ const union {
+-  uint8_t bytes[40];
+   float values[10];
+ } dnn_logits_weights_part_0 = {{
+-    0x13, 0x12, 0x39, 0x3f, 0xf3, 0xa5, 0xc2, 0xbf, 0x81, 0x7f,
+-    0xbe, 0x3f, 0xf8, 0x17, 0x26, 0x3e, 0xa4, 0x19, 0xa6, 0x3f,
+-    0xf0, 0xc9, 0xb7, 0xbf, 0x6a, 0x99, 0xd2, 0x3f, 0x8a, 0x7d,
+-    0xe9, 0x3f, 0x83, 0x9a, 0x3a, 0xbf, 0xf1, 0x6c, 0x08, 0x3e,
++      0.722932040691376,  -1.52068936824799,
++       1.48826611042023,  0.162200808525085,
++       1.29765748977661,  -1.43585014343262,
++       1.64530682563782,   1.82414364814758,
++     -0.728920161724091,  0.133228078484535
+ }};
+ 
+ }  // anonymous namespace
+-- 
+2.39.3
+
+
+From 657ec2d0532edaeb3de6c1e3d1af4a344d89da3d Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 6 Apr 2019 23:35:33 +0200
+Subject: [PATCH 19/35] gfx: Use correct function to create a SkPMColor rather
+ than a SkColor
+
+---
+ src/3rdparty/chromium/ui/gfx/skbitmap_operations_unittest.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/ui/gfx/skbitmap_operations_unittest.cc b/src/3rdparty/chromium/ui/gfx/skbitmap_operations_unittest.cc
+index 632550974..622a17d80 100644
+--- a/src/3rdparty/chromium/ui/gfx/skbitmap_operations_unittest.cc
++++ b/src/3rdparty/chromium/ui/gfx/skbitmap_operations_unittest.cc
+@@ -238,7 +238,7 @@ TEST(SkBitmapOperationsTest, CreateHSLShiftedBitmapHueOnly) {
+ 
+   for (int y = 0, i = 0; y < src_h; y++) {
+     for (int x = 0; x < src_w; x++) {
+-      *src.getAddr32(x, y) = SkColorSetARGB(255, 0, 0, i % 255);
++      *src.getAddr32(x, y) = SkPackARGB32(255, 0, 0, i % 255);
+       i++;
+     }
+   }
+-- 
+2.39.3
+
+
+From 7e3823710c4c63fe284069794be875312acd5b06 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 7 Apr 2019 11:54:18 +0200
+Subject: [PATCH 20/35] skia: Fix testcases to use SkPMColor rather than
+ SkColor for internal access
+
+---
+ .../chromium/skia/ext/image_operations_unittest.cc   | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/src/3rdparty/chromium/skia/ext/image_operations_unittest.cc b/src/3rdparty/chromium/skia/ext/image_operations_unittest.cc
+index 897095517..253a55140 100644
+--- a/src/3rdparty/chromium/skia/ext/image_operations_unittest.cc
++++ b/src/3rdparty/chromium/skia/ext/image_operations_unittest.cc
+@@ -18,9 +18,11 @@
+ #include "skia/ext/image_operations.h"
+ #include "testing/gtest/include/gtest/gtest.h"
+ #include "third_party/skia/include/core/SkBitmap.h"
++#include "third_party/skia/include/core/SkColorPriv.h"
+ #include "third_party/skia/include/core/SkColorSpace.h"
+ #include "third_party/skia/include/core/SkImageInfo.h"
+ #include "third_party/skia/include/core/SkRect.h"
++#include "third_party/skia/include/core/SkUnPreMultiply.h"
+ #include "ui/gfx/codec/png_codec.h"
+ #include "ui/gfx/geometry/size.h"
+ 
+@@ -151,7 +153,7 @@ void DrawCheckerToBitmap(int w, int h,
+ 
+       bool use_color2 = (x_bit != y_bit);  // xor
+ 
+-      *bmp->getAddr32(x, y) = (use_color2 ? color2 : color1);
++      *bmp->getAddr32(x, y) = SkPreMultiplyColor(use_color2 ? color2 : color1);
+     }
+   }
+ }
+@@ -273,7 +275,7 @@ void CheckResizeMethodShouldAverageGrid(
+         std::max(tested_pixel.max_color_distance,
+                  tested_method.max_color_distance_override);
+ 
+-    const SkColor actual_color = *dest.getAddr32(x, y);
++    const SkColor actual_color = SkUnPreMultiply::PMColorToColor(*dest.getAddr32(x, y));
+ 
+     // Check that the pixels away from the border region are very close
+     // to the expected average color
+@@ -528,7 +530,7 @@ TEST(ImageOperations, ScaleUp) {
+   for (int src_y = 0; src_y < src_h; ++src_y) {
+     for (int src_x = 0; src_x < src_w; ++src_x) {
+       *src.getAddr32(src_x, src_y) =
+-          SkColorSetARGB(255, 10 + src_x * 100, 10 + src_y * 100, 0);
++          SkPackARGB32(255, 10 + src_x * 100, 10 + src_y * 100, 0);
+     }
+   }
+ 
+@@ -552,7 +554,7 @@ TEST(ImageOperations, ScaleUp) {
+               lanczos3(src_x + 0.5 - dst_x_in_src) *
+               lanczos3(src_y + 0.5 - dst_y_in_src);
+           sum += coeff;
+-          SkColor tmp = *src.getAddr32(src_x, src_y);
++          SkColor tmp = SkUnPreMultiply::PMColorToColor(*src.getAddr32(src_x, src_y));
+           a += coeff * SkColorGetA(tmp);
+           r += coeff * SkColorGetR(tmp);
+           g += coeff * SkColorGetG(tmp);
+@@ -571,7 +573,7 @@ TEST(ImageOperations, ScaleUp) {
+       if (r > 255.0f) r = 255.0f;
+       if (g > 255.0f) g = 255.0f;
+       if (b > 255.0f) b = 255.0f;
+-      SkColor dst_color = *dst.getAddr32(dst_x, dst_y);
++      SkColor dst_color = SkUnPreMultiply::PMColorToColor(*dst.getAddr32(dst_x, dst_y));
+       EXPECT_LE(fabs(SkColorGetA(dst_color) - a), 1.5f);
+       EXPECT_LE(fabs(SkColorGetR(dst_color) - r), 1.5f);
+       EXPECT_LE(fabs(SkColorGetG(dst_color) - g), 1.5f);
+-- 
+2.39.3
+
+
+From c007d6b63e6b7aff7a00b8704d67e1dfaaad4ff2 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 7 Apr 2019 14:19:52 +0200
+Subject: [PATCH 21/35] gfx: Convert PMColor to Color before passing it to
+ BGRAGrayEqualsA8Gray
+
+---
+ src/3rdparty/chromium/ui/gfx/codec/png_codec_unittest.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/ui/gfx/codec/png_codec_unittest.cc b/src/3rdparty/chromium/ui/gfx/codec/png_codec_unittest.cc
+index 260f7c976..b949b3e59 100644
+--- a/src/3rdparty/chromium/ui/gfx/codec/png_codec_unittest.cc
++++ b/src/3rdparty/chromium/ui/gfx/codec/png_codec_unittest.cc
+@@ -853,7 +853,7 @@ TEST(PNGCodec, EncodeA8SkBitmap) {
+     for (int y = 0; y < h; y++) {
+       uint8_t original_pixel = *original_bitmap.getAddr8(x, y);
+       uint32_t decoded_pixel = *decoded_bitmap.getAddr32(x, y);
+-      EXPECT_TRUE(BGRAGrayEqualsA8Gray(decoded_pixel, original_pixel));
++      EXPECT_TRUE(BGRAGrayEqualsA8Gray(SkUnPreMultiply::PMColorToColor(decoded_pixel), original_pixel));
+     }
+   }
+ }
+-- 
+2.39.3
+
+
+From bd84d64a2f21da1a1047dc22afe9136898f302ed Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 7 Apr 2019 16:51:54 +0200
+Subject: [PATCH 22/35] gfx: select JPEG color space in an endian-neutral
+ manner
+
+---
+ src/3rdparty/chromium/ui/gfx/codec/jpeg_codec.cc | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/3rdparty/chromium/ui/gfx/codec/jpeg_codec.cc b/src/3rdparty/chromium/ui/gfx/codec/jpeg_codec.cc
+index 57607610a..018c0a8b6 100644
+--- a/src/3rdparty/chromium/ui/gfx/codec/jpeg_codec.cc
++++ b/src/3rdparty/chromium/ui/gfx/codec/jpeg_codec.cc
+@@ -212,12 +212,13 @@ bool JPEGCodec::Decode(const unsigned char* input, size_t input_size,
+       // Same as JPEGCodec::Encode(), libjpeg-turbo supports all input formats
+       // used by Chromium (i.e. RGBA and BGRA) and we just map the input
+       // parameters to a colorspace.
++
+       if (format == FORMAT_RGBA ||
+-          (format == FORMAT_SkBitmap && SK_R32_SHIFT == 0)) {
++          (format == FORMAT_SkBitmap && SK_PMCOLOR_BYTE_ORDER(R, G, B, A))) {
+         cinfo->out_color_space = JCS_EXT_RGBX;
+         cinfo->output_components = 4;
+       } else if (format == FORMAT_BGRA ||
+-                 (format == FORMAT_SkBitmap && SK_B32_SHIFT == 0)) {
++                 (format == FORMAT_SkBitmap && SK_PMCOLOR_BYTE_ORDER(B, G, R, A))) {
+         cinfo->out_color_space = JCS_EXT_BGRX;
+         cinfo->output_components = 4;
+       } else {
+-- 
+2.39.3
+
+
+From 9e36aa3f5d7a3003992e065044430081caca519c Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 7 Apr 2019 21:22:12 +0200
+Subject: [PATCH 23/35] gfx: Fix color analysis on big endian
+
+This also adds an ARGB decode mode to the PNG codec since
+CalculateKMeanColorOfBuffer needs the pixels to be in SkColor (which
+is ARGB on big endian) order.
+---
+ .../chromium/ui/gfx/codec/png_codec.cc        | 10 ++++++
+ .../chromium/ui/gfx/codec/png_codec.h         |  4 +++
+ .../chromium/ui/gfx/color_analysis.cc         | 31 +++++++++++++++++--
+ 3 files changed, 42 insertions(+), 3 deletions(-)
+
+diff --git a/src/3rdparty/chromium/ui/gfx/codec/png_codec.cc b/src/3rdparty/chromium/ui/gfx/codec/png_codec.cc
+index bcaaaa38f..2654bb21c 100644
+--- a/src/3rdparty/chromium/ui/gfx/codec/png_codec.cc
++++ b/src/3rdparty/chromium/ui/gfx/codec/png_codec.cc
+@@ -168,6 +168,10 @@ void DecodeInfoCallback(png_struct* png_ptr, png_info* info_ptr) {
+         png_set_bgr(png_ptr);
+         png_set_add_alpha(png_ptr, 0xFF, PNG_FILLER_AFTER);
+         break;
++      case PNGCodec::FORMAT_ARGB:
++        state->output_channels = 4;
++        png_set_add_alpha(png_ptr, 0xFF, PNG_FILLER_BEFORE);
++        break;
+       case PNGCodec::FORMAT_SkBitmap:
+         state->output_channels = 4;
+         png_set_add_alpha(png_ptr, 0xFF, PNG_FILLER_AFTER);
+@@ -182,6 +186,10 @@ void DecodeInfoCallback(png_struct* png_ptr, png_info* info_ptr) {
+         state->output_channels = 4;
+         png_set_bgr(png_ptr);
+         break;
++      case PNGCodec::FORMAT_ARGB:
++        state->output_channels = 4;
++	png_set_swap_alpha(png_ptr);
++        break;
+       case PNGCodec::FORMAT_SkBitmap:
+         state->output_channels = 4;
+         break;
+@@ -474,6 +482,8 @@ bool PNGCodec::Encode(const unsigned char* input,
+     case FORMAT_BGRA:
+       colorType = kBGRA_8888_SkColorType;
+       break;
++    case FORMAT_ARGB:
++      return false;
+     case FORMAT_SkBitmap:
+       colorType = kN32_SkColorType;
+       break;
+diff --git a/src/3rdparty/chromium/ui/gfx/codec/png_codec.h b/src/3rdparty/chromium/ui/gfx/codec/png_codec.h
+index dc55eacff..bb9c4f608 100644
+--- a/src/3rdparty/chromium/ui/gfx/codec/png_codec.h
++++ b/src/3rdparty/chromium/ui/gfx/codec/png_codec.h
+@@ -37,6 +37,10 @@ class CODEC_EXPORT PNGCodec {
+     // This is the default Windows DIB order.
+     FORMAT_BGRA,
+ 
++    // 4 bytes per pixel, in ARGB order in memory regardless of endianness.
++    // Only supported for decoding
++    FORMAT_ARGB,
++
+     // SkBitmap format. For Encode() kN32_SkColorType (4 bytes per pixel) and
+     // kAlpha_8_SkColorType (1 byte per pixel) formats are supported.
+     // kAlpha_8_SkColorType gets encoded into a grayscale PNG treating alpha as
+diff --git a/src/3rdparty/chromium/ui/gfx/color_analysis.cc b/src/3rdparty/chromium/ui/gfx/color_analysis.cc
+index 5033a7723..bdc2c8a68 100644
+--- a/src/3rdparty/chromium/ui/gfx/color_analysis.cc
++++ b/src/3rdparty/chromium/ui/gfx/color_analysis.cc
+@@ -20,6 +20,7 @@
+ #include "base/check_op.h"
+ #include "base/notreached.h"
+ #include "base/numerics/ranges.h"
++#include "base/sys_byteorder.h"
+ #include "third_party/skia/include/core/SkBitmap.h"
+ #include "third_party/skia/include/core/SkUnPreMultiply.h"
+ #include "ui/gfx/codec/png_codec.h"
+@@ -439,10 +440,17 @@ SkColor FindClosestColor(const uint8_t* image,
+   SkColor best_color = color;
+   const uint8_t* byte = image;
+   for (int i = 0; i < width * height; ++i) {
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+     uint8_t b = *(byte++);
+     uint8_t g = *(byte++);
+     uint8_t r = *(byte++);
+     uint8_t a = *(byte++);
++#else
++    uint8_t a = *(byte++);
++    uint8_t r = *(byte++);
++    uint8_t g = *(byte++);
++    uint8_t b = *(byte++);
++#endif
+     // Ignore fully transparent pixels.
+     if (a == 0)
+       continue;
+@@ -460,7 +468,6 @@ SkColor FindClosestColor(const uint8_t* image,
+ 
+ // For a 16x16 icon on an Intel Core i5 this function takes approximately
+ // 0.5 ms to run.
+-// TODO(port): This code assumes the CPU architecture is little-endian.
+ SkColor CalculateKMeanColorOfBuffer(uint8_t* decoded_data,
+                                     int img_width,
+                                     int img_height,
+@@ -483,10 +490,17 @@ SkColor CalculateKMeanColorOfBuffer(uint8_t* decoded_data,
+         int pixel_pos = sampler->GetSample(img_width, img_height) %
+             (img_width * img_height);
+ 
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+         uint8_t b = decoded_data[pixel_pos * 4];
+         uint8_t g = decoded_data[pixel_pos * 4 + 1];
+         uint8_t r = decoded_data[pixel_pos * 4 + 2];
+         uint8_t a = decoded_data[pixel_pos * 4 + 3];
++#else
++        uint8_t a = decoded_data[pixel_pos * 4];
++        uint8_t r = decoded_data[pixel_pos * 4 + 1];
++        uint8_t g = decoded_data[pixel_pos * 4 + 2];
++        uint8_t b = decoded_data[pixel_pos * 4 + 3];
++#endif
+         // Skip fully transparent pixels as they usually contain black in their
+         // RGB channels but do not contribute to the visual image.
+         if (a == 0)
+@@ -535,10 +549,17 @@ SkColor CalculateKMeanColorOfBuffer(uint8_t* decoded_data,
+       uint8_t* pixel = decoded_data;
+       uint8_t* decoded_data_end = decoded_data + (img_width * img_height * 4);
+       while (pixel < decoded_data_end) {
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+         uint8_t b = *(pixel++);
+         uint8_t g = *(pixel++);
+         uint8_t r = *(pixel++);
+         uint8_t a = *(pixel++);
++#else
++        uint8_t a = *(pixel++);
++        uint8_t r = *(pixel++);
++        uint8_t g = *(pixel++);
++        uint8_t b = *(pixel++);
++#endif
+         // Skip transparent pixels, see above.
+         if (a == 0)
+           continue;
+@@ -616,8 +637,12 @@ SkColor CalculateKMeanColorOfPNG(scoped_refptr<base::RefCountedMemory> png,
+ 
+   if (png.get() && png->size() &&
+       gfx::PNGCodec::Decode(png->front(), png->size(),
+-                            gfx::PNGCodec::FORMAT_BGRA, &decoded_data,
+-                            &img_width, &img_height)) {
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
++                            gfx::PNGCodec::FORMAT_BGRA,
++#else
++                            gfx::PNGCodec::FORMAT_ARGB,
++#endif
++			    &decoded_data, &img_width, &img_height)) {
+     return CalculateKMeanColorOfBuffer(&decoded_data[0], img_width, img_height,
+                                        lower_bound, upper_bound, sampler, true);
+   }
+-- 
+2.39.3
+
+
+From 999817594ec5567afd0faa7d7e770a39a34badbf Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 28 Apr 2019 15:22:43 +0200
+Subject: [PATCH 24/35] sandbox: Fix SECCOMP_*_[LM]SB_IDX for ppc64
+
+---
+ .../chromium/sandbox/linux/bpf_dsl/seccomp_macros.h   | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/src/3rdparty/chromium/sandbox/linux/bpf_dsl/seccomp_macros.h b/src/3rdparty/chromium/sandbox/linux/bpf_dsl/seccomp_macros.h
+index a6aec544e..2ab38b822 100644
+--- a/src/3rdparty/chromium/sandbox/linux/bpf_dsl/seccomp_macros.h
++++ b/src/3rdparty/chromium/sandbox/linux/bpf_dsl/seccomp_macros.h
+@@ -375,6 +375,7 @@ typedef struct pt_regs regs_struct;
+ 
+ #define SECCOMP_NR_IDX (offsetof(struct arch_seccomp_data, nr))
+ #define SECCOMP_ARCH_IDX (offsetof(struct arch_seccomp_data, arch))
++#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+ #define SECCOMP_IP_MSB_IDX \
+   (offsetof(struct arch_seccomp_data, instruction_pointer) + 4)
+ #define SECCOMP_IP_LSB_IDX \
+@@ -383,6 +384,16 @@ typedef struct pt_regs regs_struct;
+   (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 4)
+ #define SECCOMP_ARG_LSB_IDX(nr) \
+   (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 0)
++#else
++#define SECCOMP_IP_MSB_IDX \
++  (offsetof(struct arch_seccomp_data, instruction_pointer) + 0)
++#define SECCOMP_IP_LSB_IDX \
++  (offsetof(struct arch_seccomp_data, instruction_pointer) + 4)
++#define SECCOMP_ARG_MSB_IDX(nr) \
++  (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 0)
++#define SECCOMP_ARG_LSB_IDX(nr) \
++  (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 4)
++#endif
+ 
+ #define SECCOMP_PT_RESULT(_regs) (_regs).gpr[3]
+ #define SECCOMP_PT_SYSCALL(_regs) (_regs).gpr[0]
+-- 
+2.39.3
+
+
+From 8f300abb76355db2721d8216aeede294b599c3d3 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 18 May 2019 11:47:03 +0200
+Subject: [PATCH 25/35] media/renderers: Fix component order test to check
+ bytes instead of shifts
+
+---
+ .../chromium/media/renderers/paint_canvas_video_renderer.cc | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/src/3rdparty/chromium/media/renderers/paint_canvas_video_renderer.cc b/src/3rdparty/chromium/media/renderers/paint_canvas_video_renderer.cc
+index 9523ed60a..deac7db07 100644
+--- a/src/3rdparty/chromium/media/renderers/paint_canvas_video_renderer.cc
++++ b/src/3rdparty/chromium/media/renderers/paint_canvas_video_renderer.cc
+@@ -47,8 +47,7 @@
+ // Skia internal format depends on a platform. On Android it is ABGR, on others
+ // it is ARGB. Commented out lines below don't exist in libyuv yet and are
+ // shown here to indicate where ideal conversions are currently missing.
+-#if SK_B32_SHIFT == 0 && SK_G32_SHIFT == 8 && SK_R32_SHIFT == 16 && \
+-    SK_A32_SHIFT == 24
++#if SK_PMCOLOR_BYTE_ORDER(B,G,R,A)
+ #define LIBYUV_I400_TO_ARGB libyuv::I400ToARGB
+ #define LIBYUV_I420_TO_ARGB libyuv::I420ToARGB
+ #define LIBYUV_I422_TO_ARGB libyuv::I422ToARGB
+@@ -86,8 +85,7 @@
+ // #define LIBYUV_U410_TO_ARGB libyuv::U410ToARGB
+ 
+ #define LIBYUV_NV12_TO_ARGB libyuv::NV12ToARGB
+-#elif SK_R32_SHIFT == 0 && SK_G32_SHIFT == 8 && SK_B32_SHIFT == 16 && \
+-    SK_A32_SHIFT == 24
++#elif SK_PMCOLOR_BYTE_ORDER(R,G,B,A)
+ #define LIBYUV_I400_TO_ARGB libyuv::I400ToARGB
+ #define LIBYUV_I420_TO_ARGB libyuv::I420ToABGR
+ #define LIBYUV_I422_TO_ARGB libyuv::I422ToABGR
+-- 
+2.39.3
+
+
+From 3b389d8b6012872ea68a49afdcf9e3f11e3e91d5 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 18 May 2019 12:07:30 +0200
+Subject: [PATCH 26/35] media/ffmpeg: Remove #error on endianness
+
+---
+ src/3rdparty/chromium/media/ffmpeg/ffmpeg_common.cc | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/src/3rdparty/chromium/media/ffmpeg/ffmpeg_common.cc b/src/3rdparty/chromium/media/ffmpeg/ffmpeg_common.cc
+index c17dd9f83..44f99b7b8 100644
+--- a/src/3rdparty/chromium/media/ffmpeg/ffmpeg_common.cc
++++ b/src/3rdparty/chromium/media/ffmpeg/ffmpeg_common.cc
+@@ -767,10 +767,6 @@ ChannelLayout ChannelLayoutToChromeChannelLayout(int64_t layout, int channels) {
+   }
+ }
+ 
+-#if !defined(ARCH_CPU_LITTLE_ENDIAN)
+-#error The code below assumes little-endianness.
+-#endif
+-
+ VideoPixelFormat AVPixelFormatToVideoPixelFormat(AVPixelFormat pixel_format) {
+   // The YUVJ alternatives are FFmpeg's (deprecated, but still in use) way to
+   // specify a pixel format and full range color combination.
+-- 
+2.39.3
+
+
+From 441cd91703d33f3bcd84b69e3c002f9ffb562586 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 18 May 2019 12:07:49 +0200
+Subject: [PATCH 27/35] media/formats/mp4: Fix endian dependent code in
+ OpusSpecificBox::Parse
+
+---
+ .../media/formats/mp4/box_definitions.cc        | 17 ++++++++---------
+ 1 file changed, 8 insertions(+), 9 deletions(-)
+
+diff --git a/src/3rdparty/chromium/media/formats/mp4/box_definitions.cc b/src/3rdparty/chromium/media/formats/mp4/box_definitions.cc
+index 50a981fe9..a495a1dbd 100644
+--- a/src/3rdparty/chromium/media/formats/mp4/box_definitions.cc
++++ b/src/3rdparty/chromium/media/formats/mp4/box_definitions.cc
+@@ -1402,15 +1402,14 @@ bool OpusSpecificBox::Parse(BoxReader* reader) {
+   RCHECK(reader->Read4(&sample_rate));
+   RCHECK(reader->Read2s(&gain_db));
+ 
+-#if !defined(ARCH_CPU_LITTLE_ENDIAN)
+-#error The code below assumes little-endianness.
+-#endif
+-
+-  memcpy(&extradata[OPUS_EXTRADATA_SKIP_SAMPLES_OFFSET], &codec_delay_in_frames,
+-         sizeof(codec_delay_in_frames));
+-  memcpy(&extradata[OPUS_EXTRADATA_SAMPLE_RATE_OFFSET], &sample_rate,
+-         sizeof(sample_rate));
+-  memcpy(&extradata[OPUS_EXTRADATA_GAIN_OFFSET], &gain_db, sizeof(gain_db));
++  extradata[OPUS_EXTRADATA_SKIP_SAMPLES_OFFSET] = (codec_delay_in_frames >> 0) & 0xff;
++  extradata[OPUS_EXTRADATA_SKIP_SAMPLES_OFFSET+1] = (codec_delay_in_frames >> 8) & 0xff;
++  extradata[OPUS_EXTRADATA_SAMPLE_RATE_OFFSET] = (sample_rate >> 0) & 0xff;
++  extradata[OPUS_EXTRADATA_SAMPLE_RATE_OFFSET+1] = (sample_rate >> 8) & 0xff;
++  extradata[OPUS_EXTRADATA_SAMPLE_RATE_OFFSET+2] = (sample_rate >> 16) & 0xff;
++  extradata[OPUS_EXTRADATA_SAMPLE_RATE_OFFSET+3] = (sample_rate >> 24) & 0xff;
++  extradata[OPUS_EXTRADATA_GAIN_OFFSET] = (gain_db >> 0) & 0xff;
++  extradata[OPUS_EXTRADATA_GAIN_OFFSET+1] = (gain_db >> 8) & 0xff;
+ 
+   channel_count = extradata[OPUS_EXTRADATA_CHANNELS_OFFSET];
+ 
+-- 
+2.39.3
+
+
+From be324d777f38515e0dfeda552c354b6a38bf6df1 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 18 May 2019 12:25:41 +0200
+Subject: [PATCH 28/35] skia: Select RGBA component order on big endian
+
+---
+ .../chromium/skia/config/SkUserConfig.h        | 18 +++++++-----------
+ 1 file changed, 7 insertions(+), 11 deletions(-)
+
+diff --git a/src/3rdparty/chromium/skia/config/SkUserConfig.h b/src/3rdparty/chromium/skia/config/SkUserConfig.h
+index a2a56f485..1da89fcf8 100644
+--- a/src/3rdparty/chromium/skia/config/SkUserConfig.h
++++ b/src/3rdparty/chromium/skia/config/SkUserConfig.h
+@@ -159,11 +159,18 @@ SK_API void SkDebugf_FileLine(const char* file,
+                                           ...);
+ 
+ #if !defined(ANDROID)   // On Android, we use the skia default settings.
++#if defined(SK_CPU_BENDIAN)
++#define SK_A32_SHIFT    0
++#define SK_R32_SHIFT    24 
++#define SK_G32_SHIFT    16
++#define SK_B32_SHIFT    8
++#else
+ #define SK_A32_SHIFT    24
+ #define SK_R32_SHIFT    16
+ #define SK_G32_SHIFT    8
+ #define SK_B32_SHIFT    0
+ #endif
++#endif
+ 
+ #if defined(SK_BUILD_FOR_MAC)
+ 
+@@ -177,17 +184,6 @@ SK_API void SkDebugf_FileLine(const char* file,
+ // we should revisit this choice...
+ #define SK_USE_FREETYPE_EMBOLDEN
+ 
+-#if defined(SK_BUILD_FOR_UNIX) && defined(SK_CPU_BENDIAN)
+-// Above we set the order for ARGB channels in registers. I suspect that, on
+-// big endian machines, you can keep this the same and everything will work.
+-// The in-memory order will be different, of course, but as long as everything
+-// is reading memory as words rather than bytes, it will all work. However, if
+-// you find that colours are messed up I thought that I would leave a helpful
+-// locator for you. Also see the comments in
+-// base/gfx/bitmap_platform_device_linux.h
+-#error Read the comment at this location
+-#endif
+-
+ #endif
+ 
+ // These flags are no longer defined in Skia, but we have them (temporarily)
+-- 
+2.39.3
+
+
+From 21e089ceea6303cc9499cb4a80c4332d126ba80f Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:28:59 +0100
+Subject: [PATCH 29/35] media/audio: Fix byteswapping of WAV AudioFormat
+
+---
+ src/3rdparty/chromium/media/audio/wav_audio_handler.cc | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/3rdparty/chromium/media/audio/wav_audio_handler.cc b/src/3rdparty/chromium/media/audio/wav_audio_handler.cc
+index 99e8a73a3..e89252c3c 100644
+--- a/src/3rdparty/chromium/media/audio/wav_audio_handler.cc
++++ b/src/3rdparty/chromium/media/audio/wav_audio_handler.cc
+@@ -85,6 +85,11 @@ T ReadInt(const base::StringPiece& data, size_t offset) {
+   return result;
+ }
+ 
++template <>
++WavAudioHandler::AudioFormat ReadInt<WavAudioHandler::AudioFormat>(const base::StringPiece& data, size_t offset) {
++  return WavAudioHandler::AudioFormat(ReadInt<uint16_t>(data, offset));
++}
++
+ // Parse a "fmt " chunk from wav data into its parameters.
+ bool ParseFmtChunk(const base::StringPiece data, WavAudioParameters* params) {
+   DCHECK(params);
+-- 
+2.39.3
+
+
+From cf951e01cbbfbf4cc6df15f0589dc8056adbd540 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Fri, 5 Mar 2021 23:08:25 +0100
+Subject: [PATCH 30/35] base/allocator: Don't discard encoded NULL freelist
+ pointer on BE
+
+---
+ .../base/allocator/partition_allocator/partition_alloc.cc      | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/base/allocator/partition_allocator/partition_alloc.cc b/src/3rdparty/chromium/base/allocator/partition_allocator/partition_alloc.cc
+index daeb6d5cb..7639ed39f 100644
+--- a/src/3rdparty/chromium/base/allocator/partition_allocator/partition_alloc.cc
++++ b/src/3rdparty/chromium/base/allocator/partition_allocator/partition_alloc.cc
+@@ -611,7 +611,8 @@ static size_t PartitionPurgePage(internal::PartitionPage<thread_safe>* page,
+         }
+         num_new_entries++;
+ #if !defined(OS_WIN)
+-        last_slot = slot_index;
++        if (!internal::PartitionFreelistEntry::Encode(nullptr))
++          last_slot = slot_index;
+ #endif
+       }
+ 
+-- 
+2.39.3
+
+
+From 30afe305d0f43ea2a09b0db0a0145561ca6961f7 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 7 Mar 2021 01:07:10 +0100
+Subject: [PATCH 31/35] ui/gtk: After rendering, convert CAIRO_FORMAT_ARGB32 to
+ SkPMColor if needed
+
+---
+ src/3rdparty/chromium/ui/gtk/gtk_util.cc      | 23 +++++++++++++++++++
+ src/3rdparty/chromium/ui/gtk/gtk_util.h       |  3 +++
+ .../chromium/ui/gtk/native_theme_gtk.cc       |  1 +
+ .../ui/gtk/nav_button_provider_gtk.cc         |  1 +
+ 4 files changed, 28 insertions(+)
+
+diff --git a/src/3rdparty/chromium/ui/gtk/gtk_util.cc b/src/3rdparty/chromium/ui/gtk/gtk_util.cc
+index 6cd7e64be..b0680891a 100644
+--- a/src/3rdparty/chromium/ui/gtk/gtk_util.cc
++++ b/src/3rdparty/chromium/ui/gtk/gtk_util.cc
+@@ -19,6 +19,7 @@
+ #include "base/strings/string_split.h"
+ #include "base/strings/string_tokenizer.h"
+ #include "base/strings/string_util.h"
++#include "third_party/skia/include/core/SkColorPriv.h"
+ #include "ui/aura/window_tree_host.h"
+ #include "ui/base/accelerators/accelerator.h"
+ #include "ui/events/event.h"
+@@ -227,6 +228,28 @@ CairoSurface::~CairoSurface() {
+   cairo_surface_destroy(surface_);
+ }
+ 
++void CairoSurface::finish() {
++#if SK_A32_SHIFT != 24 || SK_R32_SHIFT != 16 || SK_G32_SHIFT != 8 || SK_B32_SHIFT != 0
++  /* Skia PMColor component order differs from Cairo.  Remap. */
++  unsigned char *data = cairo_image_surface_get_data(surface_);
++  if (data == nullptr)
++    return;
++  int w = cairo_image_surface_get_width(surface_);
++  int h = cairo_image_surface_get_height(surface_);
++  int stride = cairo_image_surface_get_stride(surface_);
++  while (h--) {
++    uint32_t *pix = reinterpret_cast<uint32_t *>(data);
++    for (int x = 0; x < w; x++) {
++      SkColor c = pix[x]; /* SkColor is same as CAIRO_FORMAT_ARGB32 */
++      SkPMColor p = SkPackARGB32NoCheck(SkColorGetA(c), SkColorGetR(c),
++					SkColorGetG(c), SkColorGetB(c));
++      pix[x] = p;
++    }
++    data += stride;
++  }
++#endif
++}
++
+ SkColor CairoSurface::GetAveragePixelValue(bool frame) {
+   cairo_surface_flush(surface_);
+   SkColor* data =
+diff --git a/src/3rdparty/chromium/ui/gtk/gtk_util.h b/src/3rdparty/chromium/ui/gtk/gtk_util.h
+index 1512a55ed..28d393a37 100644
+--- a/src/3rdparty/chromium/ui/gtk/gtk_util.h
++++ b/src/3rdparty/chromium/ui/gtk/gtk_util.h
+@@ -73,6 +73,9 @@ class CairoSurface {
+   // Get the drawing context for GTK to use.
+   cairo_t* cairo() { return cairo_; }
+ 
++  // Remap pixels from CAIRO_FORMAT_ARGB32 to SkPMColor
++  void finish();
++
+   // Returns the average of all pixels in the surface.  If |frame| is
+   // true, the resulting alpha will be the average alpha, otherwise it
+   // will be the max alpha across all pixels.
+diff --git a/src/3rdparty/chromium/ui/gtk/native_theme_gtk.cc b/src/3rdparty/chromium/ui/gtk/native_theme_gtk.cc
+index a77c57186..0809c86c2 100644
+--- a/src/3rdparty/chromium/ui/gtk/native_theme_gtk.cc
++++ b/src/3rdparty/chromium/ui/gtk/native_theme_gtk.cc
+@@ -53,6 +53,7 @@ SkBitmap GetWidgetBitmap(const gfx::Size& size,
+   }
+   if (render_frame)
+     gtk_render_frame(context, cr, 0, 0, size.width(), size.height());
++  surface.finish();
+   bitmap.setImmutable();
+   return bitmap;
+ }
+diff --git a/src/3rdparty/chromium/ui/gtk/nav_button_provider_gtk.cc b/src/3rdparty/chromium/ui/gtk/nav_button_provider_gtk.cc
+index 441dcd8c0..4803918f2 100644
+--- a/src/3rdparty/chromium/ui/gtk/nav_button_provider_gtk.cc
++++ b/src/3rdparty/chromium/ui/gtk/nav_button_provider_gtk.cc
+@@ -293,6 +293,7 @@ class NavButtonImageSource : public gfx::ImageSkiaSource {
+         ((pixbuf_scale * button_size_.width() - icon_size.width()) / 2),
+         ((pixbuf_scale * button_size_.height() - icon_size.height()) / 2));
+     cairo_restore(cr);
++    surface.finish();
+ 
+     return gfx::ImageSkiaRep(bitmap, scale);
+   }
+-- 
+2.39.3
+
+
+From 339c307c02db8bd4466ae60bd2f46f9f8eafc85f Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 7 Mar 2021 19:06:21 +0100
+Subject: [PATCH 32/35] ui/base/x: Fix ColorTypeForVisual on big endian
+
+---
+ src/3rdparty/chromium/ui/base/x/x11_util.cc | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/src/3rdparty/chromium/ui/base/x/x11_util.cc b/src/3rdparty/chromium/ui/base/x/x11_util.cc
+index 63bc2df4f..96b722ed2 100644
+--- a/src/3rdparty/chromium/ui/base/x/x11_util.cc
++++ b/src/3rdparty/chromium/ui/base/x/x11_util.cc
+@@ -1137,12 +1137,25 @@ SkColorType ColorTypeForVisual(x11::VisualId visual) {
+     unsigned long blue_mask;
+     int bpp;
+   } color_infos[] = {
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
+       {kRGB_565_SkColorType, 0xf800, 0x7e0, 0x1f, 16},
+       {kARGB_4444_SkColorType, 0xf000, 0xf00, 0xf0, 16},
+       {kRGBA_8888_SkColorType, 0xff, 0xff00, 0xff0000, 32},
+       {kBGRA_8888_SkColorType, 0xff0000, 0xff00, 0xff, 32},
++      {kARGB_8888_SkColorType, 0xff00, 0xff0000, 0xff000000, 32},
++      {kABGR_8888_SkColorType, 0xff000000, 0xff0000, 0xff00, 32},
+       {kRGBA_1010102_SkColorType, 0x3ff, 0xffc00, 0x3ff00000, 32},
+       {kBGRA_1010102_SkColorType, 0x3ff00000, 0xffc00, 0x3ff, 32},
++#else
++      {kRGB_565_SkColorType, 0xf800, 0x7e0, 0x1f, 16},
++      {kARGB_4444_SkColorType, 0xf00, 0xf0, 0xf, 16},
++      {kRGBA_8888_SkColorType, 0xff000000, 0xff0000, 0xff00, 32},
++      {kBGRA_8888_SkColorType, 0xff00, 0xff0000, 0xff000000, 32},
++      {kARGB_8888_SkColorType, 0xff0000, 0xff00, 0xff, 32},
++      {kABGR_8888_SkColorType, 0xff, 0xff00, 0xff0000, 32},
++      {kRGBA_1010102_SkColorType, 0xffc00000, 0x3ff000, 0xffc, 32},
++      {kBGRA_1010102_SkColorType, 0xffc, 0x3ff000, 0xffc00000, 32},
++#endif
+   };
+   auto* connection = x11::Connection::Get();
+   const auto* vis = connection->GetVisualInfoFromId(visual);
+-- 
+2.39.3
+
+
+From a0ae1c25935fb8d0607b70fc5ef981d90ef61255 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Fri, 12 Mar 2021 22:15:50 +0100
+Subject: [PATCH 33/35] blink: Remove bogus error in avif_image_decoder
+
+---
+ .../platform/image-decoders/avif/avif_image_decoder.cc        | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/avif/avif_image_decoder.cc b/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/avif/avif_image_decoder.cc
+index 5acd32d47..4870a996c 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/avif/avif_image_decoder.cc
++++ b/src/3rdparty/chromium/third_party/blink/renderer/platform/image-decoders/avif/avif_image_decoder.cc
+@@ -35,10 +35,6 @@
+ #include "ui/gfx/half_float.h"
+ #include "ui/gfx/icc_profile.h"
+ 
+-#if defined(ARCH_CPU_BIG_ENDIAN)
+-#error Blink assumes a little-endian target.
+-#endif
+-
+ namespace {
+ 
+ // Builds a gfx::ColorSpace from the ITU-T H.273 (CICP) color description in the
+-- 
+2.39.3
+
+
+From abbd92006dc80f1a3408a9a5962776d0f4d49000 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 13 Mar 2021 12:52:36 +0100
+Subject: [PATCH 34/35] pdf: Byteswap UTF-16LE strings from PDFium into native
+
+---
+ .../pdf/pdfium/pdfium_api_string_buffer_adapter.cc  | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/src/3rdparty/chromium/pdf/pdfium/pdfium_api_string_buffer_adapter.cc b/src/3rdparty/chromium/pdf/pdfium/pdfium_api_string_buffer_adapter.cc
+index 9e02e3490..869d55dad 100644
+--- a/src/3rdparty/chromium/pdf/pdfium/pdfium_api_string_buffer_adapter.cc
++++ b/src/3rdparty/chromium/pdf/pdfium/pdfium_api_string_buffer_adapter.cc
+@@ -8,11 +8,23 @@
+ 
+ #include "base/check_op.h"
+ #include "base/strings/string_util.h"
++#include "base/sys_byteorder.h"
+ 
+ namespace chrome_pdf {
+ 
+ namespace internal {
+ 
++inline void SwapString(std::string &s) { }
++
++inline void SwapString(base::string16 &s) {
++#if !defined(ARCH_CPU_LITTLE_ENDIAN)
++  // PDFium strings are UTF-16LE regardless of host byteorder
++  for (base::char16& c : s)
++    c = base::ByteSwap(c);
++#endif
++}
++
++
+ template <class StringType>
+ PDFiumAPIStringBufferAdapter<StringType>::PDFiumAPIStringBufferAdapter(
+     StringType* str,
+@@ -46,6 +58,7 @@ void PDFiumAPIStringBufferAdapter<StringType>::Close(size_t actual_size) {
+   if (actual_size > 0) {
+     DCHECK((*str_)[actual_size - 1] == 0);
+     str_->resize(actual_size - 1);
++    SwapString(*str_);
+   } else {
+     str_->clear();
+   }
+-- 
+2.39.3
+
+
+From 32cacc4f608d0bb101cefd96970aaf22d7f3b679 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 13 Mar 2021 12:53:25 +0100
+Subject: [PATCH 35/35] ppapi: Fix GetNativeImageDataFormat()
+
+---
+ .../chromium/ppapi/shared_impl/ppb_image_data_shared.cc       | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/3rdparty/chromium/ppapi/shared_impl/ppb_image_data_shared.cc b/src/3rdparty/chromium/ppapi/shared_impl/ppb_image_data_shared.cc
+index 0bfd74074..c4688d4ac 100644
+--- a/src/3rdparty/chromium/ppapi/shared_impl/ppb_image_data_shared.cc
++++ b/src/3rdparty/chromium/ppapi/shared_impl/ppb_image_data_shared.cc
+@@ -26,9 +26,9 @@ PP_ImageDataFormat PPB_ImageData_Shared::GetNativeImageDataFormat() {
+   NOTIMPLEMENTED();
+   return PP_IMAGEDATAFORMAT_BGRA_PREMUL;
+ #else
+-  if (SK_B32_SHIFT == 0)
++  if (SK_PMCOLOR_BYTE_ORDER(B, G, R, A))
+     return PP_IMAGEDATAFORMAT_BGRA_PREMUL;
+-  else if (SK_R32_SHIFT == 0)
++  else if (SK_PMCOLOR_BYTE_ORDER(R, G, B, A))
+     return PP_IMAGEDATAFORMAT_RGBA_PREMUL;
+   else
+     return PP_IMAGEDATAFORMAT_BGRA_PREMUL;  // Default to something on failure
+-- 
+2.39.3
+

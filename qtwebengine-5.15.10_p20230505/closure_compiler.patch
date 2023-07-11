@@ -1,0 +1,24 @@
+From 72d9bb0e21cc027aa30ccaf8dc775e41f0a36475 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:32:08 +0100
+Subject: [PATCH] Remove unsupported -client option to JVM
+
+---
+ src/3rdparty/chromium/third_party/closure_compiler/compiler.py | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/third_party/closure_compiler/compiler.py b/src/3rdparty/chromium/third_party/closure_compiler/compiler.py
+index 4e9521c3b..150964a84 100755
+--- a/src/3rdparty/chromium/third_party/closure_compiler/compiler.py
++++ b/src/3rdparty/chromium/third_party/closure_compiler/compiler.py
+@@ -30,7 +30,6 @@ class Compiler(object):
+       _JAVA_PATH,
+       "-jar",
+       "-Xms1024m",
+-      "-client",
+       "-XX:+TieredCompilation",
+   ]
+ 
+-- 
+2.39.3
+
