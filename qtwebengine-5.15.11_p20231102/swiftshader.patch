@@ -1,0 +1,50 @@
+From 9e35c666638aa84ffe7c0bd6575e0e3104a7df98 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:35:50 +0100
+Subject: [PATCH 1/2] Fix JIT arch for big endian ppc64
+
+---
+ .../chromium/third_party/swiftshader/src/Reactor/LLVMJIT.cpp    | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/3rdparty/chromium/third_party/swiftshader/src/Reactor/LLVMJIT.cpp b/src/3rdparty/chromium/third_party/swiftshader/src/Reactor/LLVMJIT.cpp
+index d156be89b..49075b6e3 100644
+--- a/src/3rdparty/chromium/third_party/swiftshader/src/Reactor/LLVMJIT.cpp
++++ b/src/3rdparty/chromium/third_party/swiftshader/src/Reactor/LLVMJIT.cpp
+@@ -175,6 +175,8 @@ JITGlobals JITGlobals::create()
+ #	endif
+ #elif defined(__powerpc64__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+ 	march = "ppc64le";
++#elif defined(__powerpc64__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
++	march = "ppc64";
+ #else
+ #	error "unknown architecture"
+ #endif
+-- 
+2.41.0
+
+
+From 1e20621341ad7454f72237eeb0758310a3c66d79 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:36:38 +0100
+Subject: [PATCH 2/2] Add some sources needed on ppc64 to the build
+
+---
+ .../third_party/swiftshader/third_party/llvm-10.0/BUILD.gn       | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn b/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
+index de93e072c..d8983e8f2 100644
+--- a/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
++++ b/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
+@@ -850,6 +850,7 @@ swiftshader_llvm_source_set("swiftshader_llvm_support") {
+     "llvm/lib/Support/ARMAttributeParser.cpp",
+     "llvm/lib/Support/ARMBuildAttrs.cpp",
+     "llvm/lib/Support/ARMTargetParser.cpp",
++    "llvm/lib/Support/Atomic.cpp",
+     "llvm/lib/Support/BinaryStreamError.cpp",
+     "llvm/lib/Support/BinaryStreamReader.cpp",
+     "llvm/lib/Support/BinaryStreamRef.cpp",
+-- 
+2.41.0
+

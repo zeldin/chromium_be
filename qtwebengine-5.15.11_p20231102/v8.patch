@@ -1,0 +1,25 @@
+From 3cf99285ff79d85a695a91850a0f358a9b900021 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:51:28 +0100
+Subject: [PATCH] Support 64K pages
+
+---
+ src/3rdparty/chromium/v8/src/base/platform/platform-posix.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/v8/src/base/platform/platform-posix.cc b/src/3rdparty/chromium/v8/src/base/platform/platform-posix.cc
+index 89173b593..44185d90b 100644
+--- a/src/3rdparty/chromium/v8/src/base/platform/platform-posix.cc
++++ b/src/3rdparty/chromium/v8/src/base/platform/platform-posix.cc
+@@ -306,7 +306,7 @@ void* OS::GetRandomMmapAddr() {
+   raw_addr += uint64_t{0x400000000000};
+ #elif V8_TARGET_BIG_ENDIAN
+   // Big-endian Linux: 42 bits of virtual addressing.
+-  raw_addr &= uint64_t{0x03FFFFFFF000};
++  raw_addr &= uint64_t{0x03FFFFFF0000};
+ #else
+   // Little-endian Linux: 46 bits of virtual addressing.
+   raw_addr &= uint64_t{0x3FFFFFFF0000};
+-- 
+2.41.0
+

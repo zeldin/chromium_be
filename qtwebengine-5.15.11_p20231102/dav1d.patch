@@ -1,0 +1,69 @@
+From b69f7517edcdd3b4316e3b133af5d4eb80c3b5d6 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:16:45 +0100
+Subject: [PATCH] Interpret "ppc64" as big endian
+
+---
+ src/3rdparty/chromium/third_party/dav1d/BUILD.gn          | 4 ++++
+ .../third_party/dav1d/config/linux/ppc64/config.h         | 8 +++++---
+ .../chromium/third_party/dav1d/libdav1d/src/cpu.h         | 2 +-
+ 3 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/dav1d/BUILD.gn b/src/3rdparty/chromium/third_party/dav1d/BUILD.gn
+index a7bdcaffd..ca9ee6f4a 100644
+--- a/src/3rdparty/chromium/third_party/dav1d/BUILD.gn
++++ b/src/3rdparty/chromium/third_party/dav1d/BUILD.gn
+@@ -121,6 +121,10 @@ if (is_win) {
+   }
+ }
+ 
++if (current_cpu == "ppc64") {
++  dav1d_copts += [ "-maltivec", "-mvsx" ]
++}
++
+ if (enable_nasm) {
+   nasm_assemble("dav1d_asm") {
+     sources = x86_asm_sources
+diff --git a/src/3rdparty/chromium/third_party/dav1d/config/linux/ppc64/config.h b/src/3rdparty/chromium/third_party/dav1d/config/linux/ppc64/config.h
+index f6ca57f7f..c3138078a 100644
+--- a/src/3rdparty/chromium/third_party/dav1d/config/linux/ppc64/config.h
++++ b/src/3rdparty/chromium/third_party/dav1d/config/linux/ppc64/config.h
+@@ -9,7 +9,9 @@
+ 
+ #define ARCH_ARM 0
+ 
+-#define ARCH_PPC64LE 1
++#define ARCH_PPC64LE 0
++
++#define ARCH_PPC64 1
+ 
+ #define ARCH_X86 0
+ 
+@@ -23,9 +25,9 @@
+ 
+ #define CONFIG_LOG 1
+ 
+-#define ENDIANNESS_BIG 0
++#define ENDIANNESS_BIG 1
+ 
+-#define HAVE_ASM 1
++#define HAVE_ASM 0
+ 
+ #define HAVE_GETAUXVAL 1
+ 
+diff --git a/src/3rdparty/chromium/third_party/dav1d/libdav1d/src/cpu.h b/src/3rdparty/chromium/third_party/dav1d/libdav1d/src/cpu.h
+index d5299f243..d65edfc38 100644
+--- a/src/3rdparty/chromium/third_party/dav1d/libdav1d/src/cpu.h
++++ b/src/3rdparty/chromium/third_party/dav1d/libdav1d/src/cpu.h
+@@ -36,7 +36,7 @@
+ 
+ #if ARCH_AARCH64 || ARCH_ARM
+ #include "src/arm/cpu.h"
+-#elif ARCH_PPC64LE
++#elif ARCH_PPC64LE || ARCH_PPC64
+ #include "src/ppc/cpu.h"
+ #elif ARCH_X86
+ #include "src/x86/cpu.h"
+-- 
+2.41.0
+

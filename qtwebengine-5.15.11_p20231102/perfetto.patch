@@ -1,0 +1,216 @@
+From b47111f5384a172af7831a53d09d268842ebbfab Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 2 Oct 2018 23:53:33 +0200
+Subject: [PATCH 1/4] protozero: Implement byte swap macros
+
+---
+ .../perfetto/src/protozero/proto_decoder.cc           | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/perfetto/src/protozero/proto_decoder.cc b/src/3rdparty/chromium/third_party/perfetto/src/protozero/proto_decoder.cc
+index b606818a5..926af8282 100644
+--- a/src/3rdparty/chromium/third_party/perfetto/src/protozero/proto_decoder.cc
++++ b/src/3rdparty/chromium/third_party/perfetto/src/protozero/proto_decoder.cc
+@@ -28,7 +28,11 @@ namespace protozero {
+ using namespace proto_utils;
+ 
+ #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+-#error Unimplemented for big endian archs.
++#define BYTE_SWAP_TO_LE32(x) __builtin_bswap32(x)
++#define BYTE_SWAP_TO_LE64(x) __builtin_bswap64(x)
++#else
++#define BYTE_SWAP_TO_LE32(x) (x)
++#define BYTE_SWAP_TO_LE64(x) (x)
+ #endif
+ 
+ namespace {
+@@ -113,6 +117,7 @@ ParseOneField(const uint8_t* const buffer, const uint8_t* const end) {
+       if (PERFETTO_UNLIKELY(new_pos > end))
+         return res;
+       memcpy(&int_value, pos, sizeof(uint64_t));
++      int_value = BYTE_SWAP_TO_LE64(int_value);
+       break;
+     }
+ 
+@@ -120,7 +125,9 @@ ParseOneField(const uint8_t* const buffer, const uint8_t* const end) {
+       new_pos = pos + sizeof(uint32_t);
+       if (PERFETTO_UNLIKELY(new_pos > end))
+         return res;
+-      memcpy(&int_value, pos, sizeof(uint32_t));
++      uint32_t tmp;
++      memcpy(&tmp, pos, sizeof(uint32_t));
++      int_value = BYTE_SWAP_TO_LE32(tmp);
+       break;
+     }
+ 
+-- 
+2.41.0
+
+
+From 4503586dd2f435c9cb405ea28cd3326a0ce4ad01 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 23 Feb 2019 17:38:21 +0100
+Subject: [PATCH 2/4] protozero: Swap "fixed" types
+
+---
+ .../perfetto/include/perfetto/protozero/message.h          | 7 +++++++
+ .../chromium/third_party/perfetto/src/protozero/message.cc | 6 ------
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/perfetto/include/perfetto/protozero/message.h b/src/3rdparty/chromium/third_party/perfetto/include/perfetto/protozero/message.h
+index a47db7edb..41c41d066 100644
+--- a/src/3rdparty/chromium/third_party/perfetto/include/perfetto/protozero/message.h
++++ b/src/3rdparty/chromium/third_party/perfetto/include/perfetto/protozero/message.h
+@@ -135,6 +135,13 @@ class PERFETTO_EXPORT Message {
+ 
+     pos = proto_utils::WriteVarInt(proto_utils::MakeTagFixed<T>(field_id), pos);
+     memcpy(pos, &value, sizeof(T));
++#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
++    for (size_t i = sizeof(T)/2; i--; ) {
++      uint8_t tmp = pos[i];
++      pos[i] = pos[sizeof(T)-1-i];
++      pos[sizeof(T)-1-i] = tmp;
++    }
++#endif
+     pos += sizeof(T);
+     // TODO: Optimize memcpy performance, see http://crbug.com/624311 .
+     WriteToStream(buffer, pos);
+diff --git a/src/3rdparty/chromium/third_party/perfetto/src/protozero/message.cc b/src/3rdparty/chromium/third_party/perfetto/src/protozero/message.cc
+index cfc9b37b5..66801e056 100644
+--- a/src/3rdparty/chromium/third_party/perfetto/src/protozero/message.cc
++++ b/src/3rdparty/chromium/third_party/perfetto/src/protozero/message.cc
+@@ -23,12 +23,6 @@
+ #include "perfetto/protozero/message_arena.h"
+ #include "perfetto/protozero/message_handle.h"
+ 
+-#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+-// The memcpy() for float and double below needs to be adjusted if we want to
+-// support big endian CPUs. There doesn't seem to be a compelling need today.
+-#error Unimplemented for big endian archs.
+-#endif
+-
+ namespace protozero {
+ 
+ namespace {
+-- 
+2.41.0
+
+
+From cce0a0bababd9821567f37a78cdb972659eab5e1 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 23 Feb 2019 17:39:49 +0100
+Subject: [PATCH 3/4] Prevent AssumeLittleEndian template from asserting when
+ not instantiated
+
+---
+ .../perfetto/include/perfetto/ext/base/utils.h      |  3 ++-
+ .../third_party/perfetto/src/protozero/field.cc     | 13 ++++++++-----
+ 2 files changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/perfetto/include/perfetto/ext/base/utils.h b/src/3rdparty/chromium/third_party/perfetto/include/perfetto/ext/base/utils.h
+index b702d4f72..57996be53 100644
+--- a/src/3rdparty/chromium/third_party/perfetto/include/perfetto/ext/base/utils.h
++++ b/src/3rdparty/chromium/third_party/perfetto/include/perfetto/ext/base/utils.h
+@@ -23,6 +23,7 @@
+ #include <errno.h>
+ #include <stddef.h>
+ #include <stdlib.h>
++#include <type_traits>
+ #if !PERFETTO_BUILDFLAG(PERFETTO_OS_WIN)
+ #include <sys/types.h>
+ #endif
+@@ -109,7 +110,7 @@ struct FreeDeleter {
+ 
+ template <typename T>
+ constexpr T AssumeLittleEndian(T value) {
+-  static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
++  static_assert(std::is_same<T,T>::value && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
+                 "Unimplemented on big-endian archs");
+   return value;
+ }
+diff --git a/src/3rdparty/chromium/third_party/perfetto/src/protozero/field.cc b/src/3rdparty/chromium/third_party/perfetto/src/protozero/field.cc
+index be1648219..06109c547 100644
+--- a/src/3rdparty/chromium/third_party/perfetto/src/protozero/field.cc
++++ b/src/3rdparty/chromium/third_party/perfetto/src/protozero/field.cc
+@@ -19,9 +19,11 @@
+ #include "perfetto/base/logging.h"
+ 
+ #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+-// The memcpy() for fixed32/64 below needs to be adjusted if we want to
+-// support big endian CPUs. There doesn't seem to be a compelling need today.
+-#error Unimplemented for big endian archs.
++#define BYTE_SWAP_TO_LE32(x) __builtin_bswap32(x)
++#define BYTE_SWAP_TO_LE64(x) __builtin_bswap64(x)
++#else
++#define BYTE_SWAP_TO_LE32(x) (x)
++#define BYTE_SWAP_TO_LE64(x) (x)
+ #endif
+ 
+ namespace protozero {
+@@ -41,14 +43,15 @@ void Field::SerializeAndAppendToInternal(Container* dst) const {
+     }
+     case static_cast<int>(pu::ProtoWireType::kFixed32): {
+       wptr = pu::WriteVarInt(pu::MakeTagFixed<uint32_t>(id_), wptr);
+-      uint32_t value32 = static_cast<uint32_t>(int_value_);
++      uint32_t value32 = BYTE_SWAP_TO_LE32(static_cast<uint32_t>(int_value_));
+       memcpy(wptr, &value32, sizeof(value32));
+       wptr += sizeof(uint32_t);
+       break;
+     }
+     case static_cast<int>(pu::ProtoWireType::kFixed64): {
+       wptr = pu::WriteVarInt(pu::MakeTagFixed<uint64_t>(id_), wptr);
+-      memcpy(wptr, &int_value_, sizeof(int_value_));
++      uint64_t value64 = BYTE_SWAP_TO_LE64(static_cast<uint64_t>(int_value_));
++      memcpy(wptr, &value64, sizeof(value64));
+       wptr += sizeof(uint64_t);
+       break;
+     }
+-- 
+2.41.0
+
+
+From 5cdead03476d49c3379de6e771eade6d24cb064e Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:26:43 +0100
+Subject: [PATCH 4/4] BufferedFrameDeserializer: Fix endianness handling
+
+---
+ .../perfetto/src/ipc/buffered_frame_deserializer.cc | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/perfetto/src/ipc/buffered_frame_deserializer.cc b/src/3rdparty/chromium/third_party/perfetto/src/ipc/buffered_frame_deserializer.cc
+index d893dfb5c..e6a8c6fca 100644
+--- a/src/3rdparty/chromium/third_party/perfetto/src/ipc/buffered_frame_deserializer.cc
++++ b/src/3rdparty/chromium/third_party/perfetto/src/ipc/buffered_frame_deserializer.cc
+@@ -97,7 +97,10 @@ bool BufferedFrameDeserializer::EndReceive(size_t recv_size) {
+     // Read the header into |payload_size|.
+     uint32_t payload_size = 0;
+     const char* rd_ptr = buf() + consumed_size;
+-    memcpy(base::AssumeLittleEndian(&payload_size), rd_ptr, kHeaderSize);
++    memcpy(&payload_size, rd_ptr, kHeaderSize);
++#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
++    payload_size = __builtin_bswap32(payload_size);
++#endif
+ 
+     // Saturate the |payload_size| to prevent overflows. The > capacity_ check
+     // below will abort the parsing.
+@@ -175,10 +178,14 @@ void BufferedFrameDeserializer::DecodeFrame(const char* data, size_t size) {
+ // static
+ std::string BufferedFrameDeserializer::Serialize(const Frame& frame) {
+   std::vector<uint8_t> payload = frame.SerializeAsArray();
++#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
++  const uint32_t payload_size = __builtin_bswap32(static_cast<uint32_t>(payload.size()));
++#else
+   const uint32_t payload_size = static_cast<uint32_t>(payload.size());
++#endif
+   std::string buf;
+-  buf.resize(kHeaderSize + payload_size);
+-  memcpy(&buf[0], base::AssumeLittleEndian(&payload_size), kHeaderSize);
++  buf.resize(kHeaderSize + payload.size());
++  memcpy(&buf[0], &payload_size, kHeaderSize);
+   memcpy(&buf[kHeaderSize], payload.data(), payload.size());
+   return buf;
+ }
+-- 
+2.41.0
+
