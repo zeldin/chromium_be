@@ -1,0 +1,35 @@
+From b11cbea0b035e6ab0c11297f77185d479379b941 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Thu, 17 Jul 2025 10:12:08 +0200
+Subject: [PATCH] Make sure astBuffer is parsed as LE since it comes from wasm
+
+---
+ .../@rollup/wasm-node/dist/shared/parseAst.js         | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/third_party/node/node_modules/@rollup/wasm-node/dist/shared/parseAst.js b/src/3rdparty/chromium/third_party/node/node_modules/@rollup/wasm-node/dist/shared/parseAst.js
+index c8bd293992..d193cdf37d 100644
+--- a/src/3rdparty/chromium/third_party/node/node_modules/@rollup/wasm-node/dist/shared/parseAst.js
++++ b/src/3rdparty/chromium/third_party/node/node_modules/@rollup/wasm-node/dist/shared/parseAst.js
+@@ -1948,8 +1948,17 @@ function convertNodeList(position, buffer) {
+     return list;
+ }
+ 
++function arrayify(astBuffer) {
++    let dv = new DataView(astBuffer);
++    let n = dv.byteLength >> 2;
++    let u32a = new Uint32Array(n);
++    for (let i = 0; i < n; i++)
++	u32a[i] = dv.getUint32(i<<2, true);
++    return u32a;
++}
++
+ function getAstBuffer(astBuffer) {
+-    const array = new Uint32Array(astBuffer.buffer);
++    const array = arrayify(astBuffer.buffer);
+     let convertString;
+     if (typeof Buffer !== 'undefined' && astBuffer instanceof Buffer) {
+         convertString = (position) => {
+-- 
+2.49.1
+

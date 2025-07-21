@@ -1,0 +1,124 @@
+From 537f9a63cdc1f44f3d0bf235d6301f931700eb5b Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 16 Jul 2025 12:18:35 +0200
+Subject: [PATCH] highway base ppc64 patch
+
+---
+ .../chromium/third_party/highway/BUILD.gn     |  3 +++
+ .../highway/src/hwy/ops/ppc_vsx-inl.h         | 21 ++-----------------
+ 2 files changed, 5 insertions(+), 19 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/highway/BUILD.gn b/src/3rdparty/chromium/third_party/highway/BUILD.gn
+index 9364e7e88b..5d9eec67a8 100644
+--- a/src/3rdparty/chromium/third_party/highway/BUILD.gn
++++ b/src/3rdparty/chromium/third_party/highway/BUILD.gn
+@@ -19,6 +19,9 @@ config("libhwy_external_config") {
+     # for absl::uint128 is 16.
+     defines += [ "HWY_BROKEN_TARGETS=HWY_ALL_SVE" ]
+   }
++  if (target_cpu == "ppc64") {
++    defines += [ "TOOLCHAIN_MISS_ASM_HWCAP_H" ]
++  }
+ }
+ 
+ source_set("libhwy") {
+diff --git a/src/3rdparty/chromium/third_party/highway/src/hwy/ops/ppc_vsx-inl.h b/src/3rdparty/chromium/third_party/highway/src/hwy/ops/ppc_vsx-inl.h
+index 854f7d54fa..e15e2d5b28 100644
+--- a/src/3rdparty/chromium/third_party/highway/src/hwy/ops/ppc_vsx-inl.h
++++ b/src/3rdparty/chromium/third_party/highway/src/hwy/ops/ppc_vsx-inl.h
+@@ -67,6 +67,8 @@
+ #define HWY_S390X_HAVE_Z15 0
+ #endif
+ 
++#undef __SIZEOF_INT128__
++
+ HWY_BEFORE_NAMESPACE();
+ namespace hwy {
+ namespace HWY_NAMESPACE {
+@@ -5193,7 +5195,6 @@ HWY_API MFromD<D> Dup128MaskFromMaskBits(D d, unsigned mask_bits) {
+ 
+ namespace detail {
+ 
+-#if !HWY_PPC_HAVE_10 || HWY_IS_BIG_ENDIAN
+ // fallback for missing vec_extractm
+ template <size_t N>
+ HWY_INLINE uint64_t ExtractSignBits(Vec128<uint8_t, N> sign_bits,
+@@ -5211,21 +5212,15 @@ HWY_INLINE uint64_t ExtractSignBits(Vec128<uint8_t, N> sign_bits,
+   return extracted.raw[HWY_IS_LITTLE_ENDIAN];
+ }
+ 
+-#endif  // !HWY_PPC_HAVE_10 || HWY_IS_BIG_ENDIAN
+-
+ template <typename T, size_t N>
+ HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<1> /*tag*/, Mask128<T, N> mask) {
+   const DFromM<decltype(mask)> d;
+   const Repartition<uint8_t, decltype(d)> du8;
+   const VFromD<decltype(du8)> sign_bits = BitCast(du8, VecFromMask(d, mask));
+ 
+-#if HWY_PPC_HAVE_10 && HWY_IS_LITTLE_ENDIAN
+-  return static_cast<uint64_t>(vec_extractm(sign_bits.raw));
+-#else   // Z14, Z15, PPC8, PPC9, or big-endian PPC10
+   const __vector unsigned char kBitShuffle = {120, 112, 104, 96, 88, 80, 72, 64,
+                                               56,  48,  40,  32, 24, 16, 8,  0};
+   return ExtractSignBits(sign_bits, kBitShuffle);
+-#endif  // HWY_PPC_HAVE_10 && HWY_IS_LITTLE_ENDIAN
+ }
+ 
+ template <typename T, size_t N>
+@@ -5236,9 +5231,6 @@ HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<2> /*tag*/, Mask128<T, N> mask) {
+   const Repartition<uint8_t, decltype(d)> du8;
+   const VFromD<decltype(du8)> sign_bits = BitCast(du8, VecFromMask(d, mask));
+ 
+-#if HWY_PPC_HAVE_10 && HWY_IS_LITTLE_ENDIAN
+-  return static_cast<uint64_t>(vec_extractm(BitCast(du, sign_bits).raw));
+-#else  // Z14, Z15, PPC8, PPC9, or big-endian PPC10
+   (void)du;
+ #if HWY_IS_LITTLE_ENDIAN
+   const __vector unsigned char kBitShuffle = {
+@@ -5248,7 +5240,6 @@ HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<2> /*tag*/, Mask128<T, N> mask) {
+       128, 128, 128, 128, 128, 128, 128, 128, 112, 96, 80, 64, 48, 32, 16, 0};
+ #endif
+   return ExtractSignBits(sign_bits, kBitShuffle);
+-#endif  // HWY_PPC_HAVE_10
+ }
+ 
+ template <typename T, size_t N>
+@@ -5259,9 +5250,6 @@ HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<4> /*tag*/, Mask128<T, N> mask) {
+   const Repartition<uint8_t, decltype(d)> du8;
+   const VFromD<decltype(du8)> sign_bits = BitCast(du8, VecFromMask(d, mask));
+ 
+-#if HWY_PPC_HAVE_10 && HWY_IS_LITTLE_ENDIAN
+-  return static_cast<uint64_t>(vec_extractm(BitCast(du, sign_bits).raw));
+-#else  // Z14, Z15, PPC8, PPC9, or big-endian PPC10
+   (void)du;
+ #if HWY_IS_LITTLE_ENDIAN
+   const __vector unsigned char kBitShuffle = {96,  64,  32,  0,   128, 128,
+@@ -5273,7 +5261,6 @@ HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<4> /*tag*/, Mask128<T, N> mask) {
+                                               96,  64,  32,  0};
+ #endif
+   return ExtractSignBits(sign_bits, kBitShuffle);
+-#endif  // HWY_PPC_HAVE_10
+ }
+ 
+ template <typename T, size_t N>
+@@ -5284,9 +5271,6 @@ HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<8> /*tag*/, Mask128<T, N> mask) {
+   const Repartition<uint8_t, decltype(d)> du8;
+   const VFromD<decltype(du8)> sign_bits = BitCast(du8, VecFromMask(d, mask));
+ 
+-#if HWY_PPC_HAVE_10 && HWY_IS_LITTLE_ENDIAN
+-  return static_cast<uint64_t>(vec_extractm(BitCast(du, sign_bits).raw));
+-#else  // Z14, Z15, PPC8, PPC9, or big-endian PPC10
+   (void)du;
+ #if HWY_IS_LITTLE_ENDIAN
+   const __vector unsigned char kBitShuffle = {64,  0,   128, 128, 128, 128,
+@@ -5298,7 +5282,6 @@ HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<8> /*tag*/, Mask128<T, N> mask) {
+                                               128, 128, 64,  0};
+ #endif
+   return ExtractSignBits(sign_bits, kBitShuffle);
+-#endif  // HWY_PPC_HAVE_10
+ }
+ 
+ // Returns the lowest N of the mask bits.
+-- 
+2.49.1
+

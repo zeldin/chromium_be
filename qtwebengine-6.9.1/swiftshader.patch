@@ -1,0 +1,65 @@
+From e218a67d63a3688e7f545c2508a726eeaf55d76f Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 15 Jul 2025 12:57:08 +0200
+Subject: [PATCH 1/2] swiftshader base ppc64 patch
+
+---
+ .../third_party/swiftshader/third_party/llvm-10.0/BUILD.gn     | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn b/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
+index 59e52303c5..66cf5473b9 100644
+--- a/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
++++ b/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
+@@ -133,7 +133,6 @@ swiftshader_llvm_source_set("swiftshader_llvm") {
+   if (is_ubsan_vptr) {
+     sources = [
+       "llvm/lib/MC/MCWasmObjectTargetWriter.cpp",
+-      "llvm/lib/MC/MCXCOFFObjectTargetWriter.cpp",
+       "llvm/lib/Target/ARM/MCTargetDesc/ARMTargetStreamer.cpp",
+       "llvm/lib/Target/TargetIntrinsicInfo.cpp",
+     ]
+@@ -583,6 +582,7 @@ swiftshader_llvm_source_set("swiftshader_llvm_most") {
+     "llvm/lib/MC/MCAsmInfoCOFF.cpp",
+     "llvm/lib/MC/MCAsmInfoDarwin.cpp",
+     "llvm/lib/MC/MCAsmInfoELF.cpp",
++    "llvm/lib/MC/MCAsmInfoXCOFF.cpp",
+     "llvm/lib/MC/MCAsmMacro.cpp",
+     "llvm/lib/MC/MCAsmStreamer.cpp",
+     "llvm/lib/MC/MCAssembler.cpp",
+@@ -638,6 +638,7 @@ swiftshader_llvm_source_set("swiftshader_llvm_most") {
+     "llvm/lib/MC/MCWinCOFFStreamer.cpp",
+     "llvm/lib/MC/MCWinEH.cpp",
+     "llvm/lib/MC/MCXCOFFStreamer.cpp",
++    "llvm/lib/MC/MCXCOFFObjectTargetWriter.cpp",
+     "llvm/lib/MC/MachObjectWriter.cpp",
+     "llvm/lib/MC/StringTableBuilder.cpp",
+     "llvm/lib/MC/SubtargetFeature.cpp",
+-- 
+2.49.1
+
+
+From 4578e673777e954b47b41dc27215090e21d86f35 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:36:38 +0100
+Subject: [PATCH 2/2] Add a source needed on ppc64 to the build
+
+---
+ .../third_party/swiftshader/third_party/llvm-10.0/BUILD.gn       | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn b/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
+index 66cf5473b9..7221d6a5c6 100644
+--- a/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
++++ b/src/3rdparty/chromium/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
+@@ -868,6 +868,7 @@ swiftshader_llvm_source_set("swiftshader_llvm_support") {
+     "llvm/lib/Support/ARMAttributeParser.cpp",
+     "llvm/lib/Support/ARMBuildAttrs.cpp",
+     "llvm/lib/Support/ARMTargetParser.cpp",
++    "llvm/lib/Support/Atomic.cpp",
+     "llvm/lib/Support/BinaryStreamError.cpp",
+     "llvm/lib/Support/BinaryStreamReader.cpp",
+     "llvm/lib/Support/BinaryStreamRef.cpp",
+-- 
+2.49.1
+

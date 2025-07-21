@@ -1,0 +1,47 @@
+From 75cf18efc2d3b4c0f02f85b0dcb1cb7aad8e3d79 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 15 Jul 2025 12:56:36 +0200
+Subject: [PATCH] angle base ppc64 patch
+
+---
+ .../angle/src/compiler/translator/InfoSink.h          | 11 ++++++++++-
+ .../third_party/angle/src/libANGLE/Constants.h        |  1 +
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/third_party/angle/src/compiler/translator/InfoSink.h b/src/3rdparty/chromium/third_party/angle/src/compiler/translator/InfoSink.h
+index bf6df8800c..d8360ef5aa 100644
+--- a/src/3rdparty/chromium/third_party/angle/src/compiler/translator/InfoSink.h
++++ b/src/3rdparty/chromium/third_party/angle/src/compiler/translator/InfoSink.h
+@@ -93,7 +93,16 @@ class TInfoSinkBase
+             stream.precision(8);
+             stream << f;
+         }
+-        sink.append(stream.str());
++
++        // Hack to work around a bug where negative floating point values
++        // are rendered like '.0.5' instead of '-0.5'
++        std::string res(stream.str());
++
++        if (signbit(f)) { // test if f is negative
++            res[0] = '-';
++        }
++
++        sink.append(res);
+         return *this;
+     }
+     // Write boolean values as their names instead of integral value.
+diff --git a/src/3rdparty/chromium/third_party/angle/src/libANGLE/Constants.h b/src/3rdparty/chromium/third_party/angle/src/libANGLE/Constants.h
+index 684beda994..d5dde8ec49 100644
+--- a/src/3rdparty/chromium/third_party/angle/src/libANGLE/Constants.h
++++ b/src/3rdparty/chromium/third_party/angle/src/libANGLE/Constants.h
+@@ -9,6 +9,7 @@
+ #ifndef LIBANGLE_CONSTANTS_H_
+ #define LIBANGLE_CONSTANTS_H_
+ 
++#include <cstddef>
+ #include "common/platform.h"
+ 
+ #include <stddef.h>
+-- 
+2.49.1
+

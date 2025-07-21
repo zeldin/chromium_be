@@ -1,0 +1,73 @@
+From c253351f13d4a22431ad54282ec9ed7153d8ec78 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 11 Apr 2021 15:52:01 +0200
+Subject: [PATCH 1/2] quiche_endian: Include <array> for std::begin
+
+---
+ .../net/third_party/quiche/src/quiche/common/quiche_endian.h     | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/3rdparty/chromium/net/third_party/quiche/src/quiche/common/quiche_endian.h b/src/3rdparty/chromium/net/third_party/quiche/src/quiche/common/quiche_endian.h
+index 2aaa478317..8c2fe62293 100644
+--- a/src/3rdparty/chromium/net/third_party/quiche/src/quiche/common/quiche_endian.h
++++ b/src/3rdparty/chromium/net/third_party/quiche/src/quiche/common/quiche_endian.h
+@@ -8,6 +8,7 @@
+ #include <algorithm>
+ #include <cstdint>
+ #include <type_traits>
++#include <array>
+ 
+ #include "quiche/common/platform/api/quiche_export.h"
+ 
+-- 
+2.49.1
+
+
+From d26f3cdd8faeed76e0d3ed6860cd8d7c5b5b4d42 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 11 Apr 2021 15:52:57 +0200
+Subject: [PATCH 2/2] quiche_endian: Handle big endian hosts correctly
+
+---
+ .../quiche/src/quiche/common/quiche_endian.h          | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/3rdparty/chromium/net/third_party/quiche/src/quiche/common/quiche_endian.h b/src/3rdparty/chromium/net/third_party/quiche/src/quiche/common/quiche_endian.h
+index 8c2fe62293..7594bc1d53 100644
+--- a/src/3rdparty/chromium/net/third_party/quiche/src/quiche/common/quiche_endian.h
++++ b/src/3rdparty/chromium/net/third_party/quiche/src/quiche/common/quiche_endian.h
+@@ -16,13 +16,14 @@ namespace quiche {
+ 
+ enum Endianness {
+   NETWORK_BYTE_ORDER,  // big endian
+-  HOST_BYTE_ORDER      // little endian
++  HOST_BYTE_ORDER      // either little or big endian
+ };
+ 
+ // Provide utility functions that convert from/to network order (big endian)
+ // to/from host order (little endian).
+ class QUICHE_EXPORT QuicheEndian {
+  public:
++#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+   // Convert |x| from host order (little endian) to network order (big endian).
+ #if defined(__clang__) || \
+     (defined(__GNUC__) && \
+@@ -35,8 +36,14 @@ class QUICHE_EXPORT QuicheEndian {
+   static uint32_t HostToNet32(uint32_t x) { return PortableByteSwap(x); }
+   static uint64_t HostToNet64(uint64_t x) { return PortableByteSwap(x); }
+ #endif
++#else
++  // Host order is the same as network order (big endian)
++  static uint16_t HostToNet16(uint16_t x) { return x; }
++  static uint32_t HostToNet32(uint32_t x) { return x; }
++  static uint64_t HostToNet64(uint64_t x) { return x; }
++#endif
+ 
+-  // Convert |x| from network order (big endian) to host order (little endian).
++  // Convert |x| from network order (big endian) to host order (little/big endian).
+   static uint16_t NetToHost16(uint16_t x) { return HostToNet16(x); }
+   static uint32_t NetToHost32(uint32_t x) { return HostToNet32(x); }
+   static uint64_t NetToHost64(uint64_t x) { return HostToNet64(x); }
+-- 
+2.49.1
+
