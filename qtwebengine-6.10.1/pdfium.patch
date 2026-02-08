@@ -1,0 +1,85 @@
+From 66f7a6421a86264d7b426adf2fee94c0a42e54fb Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 16 Jul 2025 12:19:05 +0200
+Subject: [PATCH 1/2] pdfium base ppc64 patch
+
+---
+ src/3rdparty/chromium/third_party/pdfium/BUILD.gn | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/third_party/pdfium/BUILD.gn b/src/3rdparty/chromium/third_party/pdfium/BUILD.gn
+index acb6ef6977..6bdfa901d3 100644
+--- a/src/3rdparty/chromium/third_party/pdfium/BUILD.gn
++++ b/src/3rdparty/chromium/third_party/pdfium/BUILD.gn
+@@ -25,7 +25,7 @@ group("freetype_common") {
+ }
+ 
+ config("pdfium_common_config") {
+-  cflags = []
++  cflags = [ "-DPNG_POWERPC_VSX_OPT=0" ]
+   cflags_cc = []
+   ldflags = []
+   include_dirs = [ "." ]
+-- 
+2.52.0
+
+
+From 580df22c8e60c1215ba8a233a4c2ae9abdd4d069 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 9 Jul 2023 17:42:28 +0200
+Subject: [PATCH 2/2] Fix rendering on big endian
+
+---
+ .../pdfium/core/fxge/agg/cfx_agg_devicedriver.cpp            | 5 +++--
+ .../third_party/pdfium/core/fxge/skia/fx_skia_device.cpp     | 4 ++++
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/pdfium/core/fxge/agg/cfx_agg_devicedriver.cpp b/src/3rdparty/chromium/third_party/pdfium/core/fxge/agg/cfx_agg_devicedriver.cpp
+index a306b4ccf2..0ffa59226e 100644
+--- a/src/3rdparty/chromium/third_party/pdfium/core/fxge/agg/cfx_agg_devicedriver.cpp
++++ b/src/3rdparty/chromium/third_party/pdfium/core/fxge/agg/cfx_agg_devicedriver.cpp
+@@ -13,6 +13,7 @@
+ #include <utility>
+ 
+ #include "build/build_config.h"
++#include "core/fxcrt/byteorder.h"
+ #include "core/fxcrt/check.h"
+ #include "core/fxcrt/check_op.h"
+ #include "core/fxcrt/compiler_specific.h"
+@@ -86,7 +87,7 @@ void RgbByteOrderCompositeRect(const RetainPtr<CFX_DIBitmap>& bitmap,
+   const int bytes_per_pixel = bitmap->GetBPP() / 8;
+   if (src_alpha == 255) {
+     if (bytes_per_pixel == 4) {
+-      const int src_abgr = FXARGB_TOBGRORDERDIB(src_argb);
++      const int src_abgr = fxcrt::FromLE32(FXARGB_TOBGRORDERDIB(src_argb));
+       for (int row = rect.top; row < rect.bottom; row++) {
+         auto dest_row_span = bitmap->GetWritableScanlineAs<uint32_t>(row);
+         fxcrt::Fill(dest_row_span.subspan(rect.left, width), src_abgr);
+@@ -764,7 +765,7 @@ CFX_AggRenderer::CFX_AggRenderer(const RetainPtr<CFX_DIBitmap>& pDevice,
+                                  bool bFullCover,
+                                  bool bRgbByteOrder)
+     : m_Alpha(FXARGB_A(color)),
+-      m_Color(bRgbByteOrder ? FXARGB_TOBGRORDERDIB(color) : color),
++      m_Color(fxcrt::FromLE32(bRgbByteOrder ? FXARGB_TOBGRORDERDIB(color) : color)),
+       m_bFullCover(bFullCover),
+       m_bRgbByteOrder(bRgbByteOrder),
+       m_ClipBox(GetClipBoxFromRegion(pDevice, pClipRgn)),
+diff --git a/src/3rdparty/chromium/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp b/src/3rdparty/chromium/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp
+index cebb6e8817..2e4e72d899 100644
+--- a/src/3rdparty/chromium/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp
++++ b/src/3rdparty/chromium/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp
+@@ -164,7 +164,11 @@ void DebugValidate(const RetainPtr<CFX_DIBitmap>& bitmap) {
+ }
+ 
+ SkColorType Get32BitSkColorType(bool is_rgb_byte_order) {
++#ifdef ARCH_CPU_BIG_ENDIAN
++  return is_rgb_byte_order ? kABGR_8888_SkColorType : kARGB_8888_SkColorType;
++#else
+   return is_rgb_byte_order ? kRGBA_8888_SkColorType : kBGRA_8888_SkColorType;
++#endif
+ }
+ 
+ SkPathFillType GetAlternateOrWindingFillType(
+-- 
+2.52.0
+

@@ -1,0 +1,71 @@
+From 404e71a0a52ff0c2c70f72cd47dcc60f5a165b02 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 15 Jul 2025 12:56:10 +0200
+Subject: [PATCH] sqlite base ppc64 patch
+
+---
+ .../chromium/third_party/sqlite/src/amalgamation/sqlite3.c     | 3 ++-
+ .../chromium/third_party/sqlite/src/amalgamation_dev/sqlite3.c | 3 ++-
+ src/3rdparty/chromium/third_party/sqlite/src/ext/rtree/rtree.c | 3 ++-
+ src/3rdparty/chromium/third_party/sqlite/src/src/sqliteInt.h   | 3 ++-
+ 4 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/sqlite/src/amalgamation/sqlite3.c b/src/3rdparty/chromium/third_party/sqlite/src/amalgamation/sqlite3.c
+index 25febecdb1..c3a803cd30 100644
+--- a/src/3rdparty/chromium/third_party/sqlite/src/amalgamation/sqlite3.c
++++ b/src/3rdparty/chromium/third_party/sqlite/src/amalgamation/sqlite3.c
+@@ -15390,7 +15390,8 @@ typedef INT16_TYPE LogEst;
+ # elif defined(i386)    || defined(__i386__)      || defined(_M_IX86) ||    \
+      defined(__x86_64)  || defined(__x86_64__)    || defined(_M_X64)  ||    \
+      defined(_M_AMD64)  || defined(_M_ARM)        || defined(__x86)   ||    \
+-     defined(__ARMEL__) || defined(__AARCH64EL__) || defined(_M_ARM64)
++     defined(__ARMEL__) || defined(__AARCH64EL__) || defined(_M_ARM64) ||   \
++     defined(__powerpc64__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+ #   define SQLITE_BYTEORDER 1234
+ # elif defined(sparc)   || defined(__ARMEB__)     || defined(__AARCH64EB__)
+ #   define SQLITE_BYTEORDER 4321
+diff --git a/src/3rdparty/chromium/third_party/sqlite/src/amalgamation_dev/sqlite3.c b/src/3rdparty/chromium/third_party/sqlite/src/amalgamation_dev/sqlite3.c
+index fc51ef0bc1..2e3cd94f55 100644
+--- a/src/3rdparty/chromium/third_party/sqlite/src/amalgamation_dev/sqlite3.c
++++ b/src/3rdparty/chromium/third_party/sqlite/src/amalgamation_dev/sqlite3.c
+@@ -15403,7 +15403,8 @@ typedef INT16_TYPE LogEst;
+ # elif defined(i386)    || defined(__i386__)      || defined(_M_IX86) ||    \
+      defined(__x86_64)  || defined(__x86_64__)    || defined(_M_X64)  ||    \
+      defined(_M_AMD64)  || defined(_M_ARM)        || defined(__x86)   ||    \
+-     defined(__ARMEL__) || defined(__AARCH64EL__) || defined(_M_ARM64)
++     defined(__ARMEL__) || defined(__AARCH64EL__) || defined(_M_ARM64) ||   \
++     defined(__powerpc64__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+ #   define SQLITE_BYTEORDER 1234
+ # elif defined(sparc)   || defined(__ARMEB__)     || defined(__AARCH64EB__)
+ #   define SQLITE_BYTEORDER 4321
+diff --git a/src/3rdparty/chromium/third_party/sqlite/src/ext/rtree/rtree.c b/src/3rdparty/chromium/third_party/sqlite/src/ext/rtree/rtree.c
+index 299b5b54b9..dfba246b25 100644
+--- a/src/3rdparty/chromium/third_party/sqlite/src/ext/rtree/rtree.c
++++ b/src/3rdparty/chromium/third_party/sqlite/src/ext/rtree/rtree.c
+@@ -485,7 +485,8 @@ struct RtreeMatchArg {
+ # elif defined(i386)    || defined(__i386__)      || defined(_M_IX86) ||    \
+      defined(__x86_64)  || defined(__x86_64__)    || defined(_M_X64)  ||    \
+      defined(_M_AMD64)  || defined(_M_ARM)        || defined(__x86)   ||    \
+-     defined(__ARMEL__) || defined(__AARCH64EL__) || defined(_M_ARM64)
++     defined(__ARMEL__) || defined(__AARCH64EL__) || defined(_M_ARM64) ||   \
++     defined(__powerpc64__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+ #   define SQLITE_BYTEORDER 1234
+ # elif defined(sparc)   || defined(__ARMEB__)     || defined(__AARCH64EB__)
+ #   define SQLITE_BYTEORDER 4321
+diff --git a/src/3rdparty/chromium/third_party/sqlite/src/src/sqliteInt.h b/src/3rdparty/chromium/third_party/sqlite/src/src/sqliteInt.h
+index d98a4f7f06..14b956a7cb 100644
+--- a/src/3rdparty/chromium/third_party/sqlite/src/src/sqliteInt.h
++++ b/src/3rdparty/chromium/third_party/sqlite/src/src/sqliteInt.h
+@@ -971,7 +971,8 @@ typedef INT16_TYPE LogEst;
+ # elif defined(i386)    || defined(__i386__)      || defined(_M_IX86) ||    \
+      defined(__x86_64)  || defined(__x86_64__)    || defined(_M_X64)  ||    \
+      defined(_M_AMD64)  || defined(_M_ARM)        || defined(__x86)   ||    \
+-     defined(__ARMEL__) || defined(__AARCH64EL__) || defined(_M_ARM64)
++     defined(__ARMEL__) || defined(__AARCH64EL__) || defined(_M_ARM64) ||   \
++     defined(__powerpc64__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+ #   define SQLITE_BYTEORDER 1234
+ # elif defined(sparc)   || defined(__ARMEB__)     || defined(__AARCH64EB__)
+ #   define SQLITE_BYTEORDER 4321
+-- 
+2.52.0
+

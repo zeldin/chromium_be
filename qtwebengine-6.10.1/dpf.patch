@@ -1,0 +1,24 @@
+From 52d58616382b258fff6f686c43c1a7b4222d8a57 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Mon, 3 Jul 2023 13:36:40 +0200
+Subject: [PATCH] Remove check for LE
+
+---
+ .../code/dpf/internal/evaluate_prg_hwy.cc                        | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/3rdparty/chromium/third_party/distributed_point_functions/code/dpf/internal/evaluate_prg_hwy.cc b/src/3rdparty/chromium/third_party/distributed_point_functions/code/dpf/internal/evaluate_prg_hwy.cc
+index 05fb2a3f3a..6dfd095f63 100644
+--- a/src/3rdparty/chromium/third_party/distributed_point_functions/code/dpf/internal/evaluate_prg_hwy.cc
++++ b/src/3rdparty/chromium/third_party/distributed_point_functions/code/dpf/internal/evaluate_prg_hwy.cc
+@@ -127,7 +127,6 @@ auto IsBitSet(D d, const V input, int index) {
+   // Now load it into a vector of 64-bit integers. Note that every second
+   // element of that vector will be 0.
+   const hn::Repartition<uint64_t, D> d64;
+-  static_assert(ABSL_IS_LITTLE_ENDIAN);
+   const auto mask_64 =
+       hn::LoadDup128(d64, reinterpret_cast<const uint64_t*>(&mask));
+ 
+-- 
+2.52.0
+

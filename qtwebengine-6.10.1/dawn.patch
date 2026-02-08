@@ -1,0 +1,31 @@
+From 131b3c4dca5095931cc03d0f51a29a5d0fc7f626 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 16 Jul 2025 12:19:58 +0200
+Subject: [PATCH] dawn base ppc64 patch
+
+---
+ .../chromium/third_party/dawn/src/dawn/common/Platform.h    | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/dawn/src/dawn/common/Platform.h b/src/3rdparty/chromium/third_party/dawn/src/dawn/common/Platform.h
+index 165c5f20b7..de0b9a262a 100644
+--- a/src/3rdparty/chromium/third_party/dawn/src/dawn/common/Platform.h
++++ b/src/3rdparty/chromium/third_party/dawn/src/dawn/common/Platform.h
+@@ -159,10 +159,12 @@
+ #elif defined(__s390x__)
+ #define DAWN_PLATFORM_IS_S390X 1
+ 
+-#elif defined(__PPC__)
+-#define DAWN_PLATFORM_IS_PPC 1
++// Order matters here
++// PPC64 also defines PPC, which can lead to detection failures on ppc64le systems
+ #elif defined(__PPC64__)
+ #define DAWN_PLATFORM_IS_PPC64 1
++#elif defined(__PPC__)
++#define DAWN_PLATFORM_IS_PPC 1
+ 
+ #elif defined(__wasm32__)
+ #define DAWN_PLATFORM_IS_WASM32 1
+-- 
+2.52.0
+
