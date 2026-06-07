@@ -1,0 +1,25 @@
+From dedfb055990a3c58778d74fa790d8dda7ae4890e Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 25 Mar 2026 14:31:52 +0100
+Subject: [PATCH] Remove unused cfl stuff
+
+---
+ third_party/libaom/libaom_srcs.gni | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/libaom/libaom_srcs.gni b/third_party/libaom/libaom_srcs.gni
+index 2db409984d..2bdbd1c6ef 100644
+--- a/third_party/libaom/libaom_srcs.gni
++++ b/third_party/libaom/libaom_srcs.gni
+@@ -84,7 +84,7 @@ aom_av1_common_intrin_sve2 =
+     [ "//third_party/libaom/source/libaom/av1/common/arm/convolve_sve2.c" ]
+ 
+ aom_av1_common_intrin_vsx =
+-    [ "//third_party/libaom/source/libaom/av1/common/ppc/cfl_ppc.c" ]
++    [ ]
+ 
+ aom_av1_common_sources = [
+   "//third_party/libaom/source/libaom/av1/arg_defs.c",
+-- 
+2.52.0
+

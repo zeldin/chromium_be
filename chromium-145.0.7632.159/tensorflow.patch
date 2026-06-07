@@ -1,0 +1,209 @@
+From c528c45f24b147f72116851c8ced95f2c97482f5 Mon Sep 17 00:00:00 2001
+From: Yasir Ashfaq <Yasir.Ashfaq1@ibm.com>
+Date: Wed, 14 Jan 2026 09:11:33 +0530
+Subject: [PATCH 1/4] Update ByteSwap functions for s390x
+
+Signed-off-by: Yasir Ashfaq <Yasir.Ashfaq1@ibm.com>
+---
+ .../compiler/mlir/lite/core/model_builder_base.h | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/third_party/tflite/src/tensorflow/compiler/mlir/lite/core/model_builder_base.h b/third_party/tflite/src/tensorflow/compiler/mlir/lite/core/model_builder_base.h
+index 15a66bd93e..5bf4423374 100644
+--- a/third_party/tflite/src/tensorflow/compiler/mlir/lite/core/model_builder_base.h
++++ b/third_party/tflite/src/tensorflow/compiler/mlir/lite/core/model_builder_base.h
+@@ -207,7 +207,7 @@ class FlatBufferModelBase {
+ 
+ #if FLATBUFFERS_LITTLEENDIAN == 0
+ 
+-  void ByteSwapSerializedModel(std::string* serialized_model,
++  static void ByteSwapSerializedModel(std::string* serialized_model,
+                                bool from_big_endian) {
+     const uint8_t* buffer =
+         reinterpret_cast<const uint8_t*>(serialized_model->c_str());
+@@ -215,7 +215,7 @@ class FlatBufferModelBase {
+     ByteSwapTFLiteModel(input_model, from_big_endian);
+   }
+ 
+-  void ByteSwapBuffer(int8_t tensor_type, size_t buffer_size, uint8_t* buffer,
++  static void ByteSwapBuffer(int8_t tensor_type, size_t buffer_size, uint8_t* buffer,
+                       bool from_big_endian) {
+     switch (tensor_type) {
+       case tflite::TensorType_STRING: {
+@@ -260,7 +260,7 @@ class FlatBufferModelBase {
+     }
+   }
+ 
+-  void ByteSwapTFLiteModel(const tflite::Model* tfl_model,
++  static void ByteSwapTFLiteModel(const tflite::Model* tfl_model,
+                            bool from_big_endian) {
+     std::vector<bool> buffer_swapped(tfl_model->buffers()->size(), false);
+     for (size_t subgraph_idx = 0; subgraph_idx < tfl_model->subgraphs()->size();
+@@ -285,19 +285,19 @@ class FlatBufferModelBase {
+     }
+   }
+ 
+-  std::unique_ptr<T> ByteConvertModel(std::unique_ptr<T> model,
++  static std::unique_ptr<T> ByteConvertModel(std::unique_ptr<T> model,
+                                       ErrorReporter* error_reporter,
+-                                      bool from_big_endian) {
++                                      bool from_big_endian = false) {
+     if (model == nullptr) return model;
+     auto tfl_model = model->GetModel();
+     if (tfl_model->subgraphs()->size() == 0) return model;
+     if (tfl_model->subgraphs()->Get(0)->tensors()->size() == 0) return model;
+     if (tfl_model->buffers()->size() < 2) return model;
+-    return ByteSwapFlatBufferModelBase<T>(std::move(model), error_reporter,
++    return ByteSwapFlatBufferModelBase(std::move(model), error_reporter,
+                                           from_big_endian);
+   }
+ 
+-  std::unique_ptr<T> ByteSwapFlatBufferModelBase(std::unique_ptr<T> model,
++  static std::unique_ptr<T> ByteSwapFlatBufferModelBase(std::unique_ptr<T> model,
+                                                  ErrorReporter* error_reporter,
+                                                  bool from_big_endian) {
+     FlatBufferModelBase<T>* modelp = model.release();
+@@ -315,7 +315,7 @@ class FlatBufferModelBase {
+         builder_->GetSize(), error_reporter);
+   }
+ 
+-  void ByteSwapTFLiteModelT(tflite::ModelT* tfl_modelt, bool from_big_endian) {
++  static void ByteSwapTFLiteModelT(tflite::ModelT* tfl_modelt, bool from_big_endian) {
+     size_t bytes_per_elem = 0;
+     std::vector<bool> buffer_swapped(tfl_modelt->buffers.size(), false);
+     for (size_t subgraph_idx = 0; subgraph_idx < tfl_modelt->subgraphs.size();
+-- 
+2.52.0
+
+
+From 0d2fc192fe3e3ca73f63384d8869d00fd6fc7ed9 Mon Sep 17 00:00:00 2001
+From: saisindhuri91 <saisindhuri91@gmail.com>
+Date: Wed, 26 Feb 2025 12:48:32 +0530
+Subject: [PATCH 2/4] Update flexbuffers_util.h
+
+Signed-off-by: saisindhuri91 <Sai.Sindhuri.Avulamanda@ibm.com>
+---
+ .../src/tensorflow/lite/delegates/xnnpack/flexbuffers_util.h    | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/tflite/src/tensorflow/lite/delegates/xnnpack/flexbuffers_util.h b/third_party/tflite/src/tensorflow/lite/delegates/xnnpack/flexbuffers_util.h
+index 6f303c8a92..da017a5fba 100644
+--- a/third_party/tflite/src/tensorflow/lite/delegates/xnnpack/flexbuffers_util.h
++++ b/third_party/tflite/src/tensorflow/lite/delegates/xnnpack/flexbuffers_util.h
+@@ -48,7 +48,7 @@ tflite::xnnpack::FloatPointer inline flexbuffers::Reference::As<
+ #if !FLATBUFFERS_LITTLEENDIAN
+   // Flexbuffers are always stored in little endian order. Returning a pointer
+   // to the float data on a big endian architecture is meaningless.
+-  return nullptr;
++  return {nullptr};
+ #else
+   return {IsFloat() ? reinterpret_cast<const float*>(data_) : nullptr};
+ #endif
+-- 
+2.52.0
+
+
+From f5bc1c7f7d2024987293cdd023654455e9f977c0 Mon Sep 17 00:00:00 2001
+From: Yasir Ashfaq <Yasir.Ashfaq1@ibm.com>
+Date: Wed, 14 Jan 2026 09:11:33 +0530
+Subject: [PATCH 3/4] Update ByteSwap functions for s390x
+
+Signed-off-by: Yasir Ashfaq <Yasir.Ashfaq1@ibm.com>
+---
+ .../tflite/converter/core/model_builder_base.h   | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/third_party/litert/src/tflite/converter/core/model_builder_base.h b/third_party/litert/src/tflite/converter/core/model_builder_base.h
+index 5865d4ed67..ffe638bf03 100644
+--- a/third_party/litert/src/tflite/converter/core/model_builder_base.h
++++ b/third_party/litert/src/tflite/converter/core/model_builder_base.h
+@@ -207,7 +207,7 @@ class FlatBufferModelBase {
+ 
+ #if FLATBUFFERS_LITTLEENDIAN == 0
+ 
+-  void ByteSwapSerializedModel(std::string* serialized_model,
++  static void ByteSwapSerializedModel(std::string* serialized_model,
+                                bool from_big_endian) {
+     const uint8_t* buffer =
+         reinterpret_cast<const uint8_t*>(serialized_model->c_str());
+@@ -215,7 +215,7 @@ class FlatBufferModelBase {
+     ByteSwapTFLiteModel(input_model, from_big_endian);
+   }
+ 
+-  void ByteSwapBuffer(int8_t tensor_type, size_t buffer_size, uint8_t* buffer,
++  static void ByteSwapBuffer(int8_t tensor_type, size_t buffer_size, uint8_t* buffer,
+                       bool from_big_endian) {
+     switch (tensor_type) {
+       case tflite::TensorType_STRING: {
+@@ -260,7 +260,7 @@ class FlatBufferModelBase {
+     }
+   }
+ 
+-  void ByteSwapTFLiteModel(const tflite::Model* tfl_model,
++  static void ByteSwapTFLiteModel(const tflite::Model* tfl_model,
+                            bool from_big_endian) {
+     std::vector<bool> buffer_swapped(tfl_model->buffers()->size(), false);
+     for (size_t subgraph_idx = 0; subgraph_idx < tfl_model->subgraphs()->size();
+@@ -285,19 +285,19 @@ class FlatBufferModelBase {
+     }
+   }
+ 
+-  std::unique_ptr<T> ByteConvertModel(std::unique_ptr<T> model,
++  static std::unique_ptr<T> ByteConvertModel(std::unique_ptr<T> model,
+                                       ErrorReporter* error_reporter,
+-                                      bool from_big_endian) {
++                                      bool from_big_endian = false) {
+     if (model == nullptr) return model;
+     auto tfl_model = model->GetModel();
+     if (tfl_model->subgraphs()->size() == 0) return model;
+     if (tfl_model->subgraphs()->Get(0)->tensors()->size() == 0) return model;
+     if (tfl_model->buffers()->size() < 2) return model;
+-    return ByteSwapFlatBufferModelBase<T>(std::move(model), error_reporter,
++    return ByteSwapFlatBufferModelBase(std::move(model), error_reporter,
+                                           from_big_endian);
+   }
+ 
+-  std::unique_ptr<T> ByteSwapFlatBufferModelBase(std::unique_ptr<T> model,
++  static std::unique_ptr<T> ByteSwapFlatBufferModelBase(std::unique_ptr<T> model,
+                                                  ErrorReporter* error_reporter,
+                                                  bool from_big_endian) {
+     FlatBufferModelBase<T>* modelp = model.release();
+@@ -315,7 +315,7 @@ class FlatBufferModelBase {
+         builder_->GetSize(), error_reporter);
+   }
+ 
+-  void ByteSwapTFLiteModelT(tflite::ModelT* tfl_modelt, bool from_big_endian) {
++  static void ByteSwapTFLiteModelT(tflite::ModelT* tfl_modelt, bool from_big_endian) {
+     size_t bytes_per_elem = 0;
+     std::vector<bool> buffer_swapped(tfl_modelt->buffers.size(), false);
+     for (size_t subgraph_idx = 0; subgraph_idx < tfl_modelt->subgraphs.size();
+-- 
+2.52.0
+
+
+From cb07d8d83c7a6a1eec64a2d75f31a92913c02b57 Mon Sep 17 00:00:00 2001
+From: saisindhuri91 <saisindhuri91@gmail.com>
+Date: Wed, 26 Feb 2025 12:48:32 +0530
+Subject: [PATCH 4/4] Update flexbuffers_util.h
+
+Signed-off-by: saisindhuri91 <Sai.Sindhuri.Avulamanda@ibm.com>
+---
+ .../litert/src/tflite/delegates/xnnpack/flexbuffers_util.h      | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/litert/src/tflite/delegates/xnnpack/flexbuffers_util.h b/third_party/litert/src/tflite/delegates/xnnpack/flexbuffers_util.h
+index 6f303c8a92..da017a5fba 100644
+--- a/third_party/litert/src/tflite/delegates/xnnpack/flexbuffers_util.h
++++ b/third_party/litert/src/tflite/delegates/xnnpack/flexbuffers_util.h
+@@ -48,7 +48,7 @@ tflite::xnnpack::FloatPointer inline flexbuffers::Reference::As<
+ #if !FLATBUFFERS_LITTLEENDIAN
+   // Flexbuffers are always stored in little endian order. Returning a pointer
+   // to the float data on a big endian architecture is meaningless.
+-  return nullptr;
++  return {nullptr};
+ #else
+   return {IsFloat() ? reinterpret_cast<const float*>(data_) : nullptr};
+ #endif
+-- 
+2.52.0
+

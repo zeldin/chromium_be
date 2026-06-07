@@ -1,0 +1,59 @@
+From 20b4acf57d57ecb2e1aa7007d3fa8e67ae3f8882 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 9 Jul 2023 17:42:28 +0200
+Subject: [PATCH] Fix rendering on big endian
+
+---
+ third_party/pdfium/core/fxge/agg/cfx_agg_devicedriver.cpp | 5 +++--
+ third_party/pdfium/core/fxge/skia/fx_skia_device.cpp      | 4 ++++
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/third_party/pdfium/core/fxge/agg/cfx_agg_devicedriver.cpp b/third_party/pdfium/core/fxge/agg/cfx_agg_devicedriver.cpp
+index 09680a6e92..f3685a5054 100644
+--- a/third_party/pdfium/core/fxge/agg/cfx_agg_devicedriver.cpp
++++ b/third_party/pdfium/core/fxge/agg/cfx_agg_devicedriver.cpp
+@@ -13,6 +13,7 @@
+ #include <utility>
+ 
+ #include "build/build_config.h"
++#include "core/fxcrt/byteorder.h"
+ #include "core/fxcrt/check.h"
+ #include "core/fxcrt/check_op.h"
+ #include "core/fxcrt/compiler_specific.h"
+@@ -84,7 +85,7 @@ void RgbByteOrderCompositeRect(const RetainPtr<CFX_DIBitmap>& bitmap,
+   const int bytes_per_pixel = bitmap->GetBPP() / 8;
+   if (src_alpha == 255) {
+     if (bytes_per_pixel == 4) {
+-      const int src_abgr = FXARGB_TOBGRORDERDIB(src_argb);
++      const int src_abgr = fxcrt::FromLE32(FXARGB_TOBGRORDERDIB(src_argb));
+       for (int row = rect.top; row < rect.bottom; row++) {
+         auto dest_row_span = bitmap->GetWritableScanlineAs<uint32_t>(row);
+         std::ranges::fill(dest_row_span.subspan(static_cast<size_t>(rect.left),
+@@ -797,7 +798,7 @@ CFX_AggRenderer::CFX_AggRenderer(const RetainPtr<CFX_DIBitmap>& pDevice,
+                                  bool bFullCover,
+                                  bool bRgbByteOrder)
+     : alpha_(FXARGB_A(color)),
+-      color_(bRgbByteOrder ? FXARGB_TOBGRORDERDIB(color) : color),
++      color_(fxcrt::FromLE32(bRgbByteOrder ? FXARGB_TOBGRORDERDIB(color) : color)),
+       full_cover_(bFullCover),
+       rgb_byte_order_(bRgbByteOrder),
+       clip_box_(GetClipBoxFromRegion(pDevice, pClipRgn)),
+diff --git a/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp b/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp
+index 012020aeae..f47b5aeb19 100644
+--- a/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp
++++ b/third_party/pdfium/core/fxge/skia/fx_skia_device.cpp
+@@ -164,7 +164,11 @@ void DebugValidate(const RetainPtr<CFX_DIBitmap>& bitmap) {
+ }
+ 
+ SkColorType Get32BitSkColorType(bool is_rgb_byte_order) {
++#ifdef ARCH_CPU_BIG_ENDIAN
++  return is_rgb_byte_order ? kABGR_8888_SkColorType : kARGB_8888_SkColorType;
++#else
+   return is_rgb_byte_order ? kRGBA_8888_SkColorType : kBGRA_8888_SkColorType;
++#endif
+ }
+ 
+ SkPathFillType GetAlternateOrWindingFillType(
+-- 
+2.52.0
+

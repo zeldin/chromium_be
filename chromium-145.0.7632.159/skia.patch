@@ -1,0 +1,1802 @@
+From 7f5b391ee04fd608a4e89214d1dd3d2f19734dd1 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Fri, 7 Jul 2023 17:25:57 +0200
+Subject: [PATCH 01/17] Disable SSE translations on big endian
+
+---
+ third_party/skia/include/core/SkTypes.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/skia/include/core/SkTypes.h b/third_party/skia/include/core/SkTypes.h
+index 5061a6565b..67236b38d0 100644
+--- a/third_party/skia/include/core/SkTypes.h
++++ b/third_party/skia/include/core/SkTypes.h
+@@ -213,7 +213,7 @@ static constexpr uint32_t SK_InvalidUniqueID = 0;
+ // to be Intel. Currently, full API support for SSSE3 on POWER8 and later
+ // processors.
+ #if defined(__POWER8_VECTOR__) && defined(__has_include) && \
+-  !defined(SK_CPU_SSE_LEVEL)
++  !defined(SK_CPU_SSE_LEVEL) && !defined(__BIG_ENDIAN__)
+ 
+     // Clang ships both Intel and PPC headers in its PPC version, storing the
+     // PPC compatibility in a subdirectory that the compiler will include before
+-- 
+2.52.0
+
+
+From cdb71ff21b4b8180f458d5137fefd083fa484607 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 2 Oct 2018 23:27:13 +0200
+Subject: [PATCH 02/17] SkJSON: Fix tagged value implementation for big endian
+
+---
+ .../skia/modules/jsonreader/SkJSONReader.cpp  | 14 ++++++++++++--
+ .../skia/modules/jsonreader/SkJSONReader.h    | 19 ++++++++++++++-----
+ 2 files changed, 26 insertions(+), 7 deletions(-)
+
+diff --git a/third_party/skia/modules/jsonreader/SkJSONReader.cpp b/third_party/skia/modules/jsonreader/SkJSONReader.cpp
+index 56eaff1597..91afcb7be4 100644
+--- a/third_party/skia/modules/jsonreader/SkJSONReader.cpp
++++ b/third_party/skia/modules/jsonreader/SkJSONReader.cpp
+@@ -37,7 +37,11 @@ static constexpr size_t kRecAlign = alignof(Value);
+ 
+ void Value::init_tagged(Tag t) {
+     memset(fData8, 0, sizeof(fData8));
++#if defined(SK_CPU_LENDIAN)
+     fData8[0] = SkTo<uint8_t>(t);
++#else
++    fData8[kValueSize-1] = SkTo<uint8_t>(t);
++#endif
+     SkASSERT(this->getTag() == t);
+ }
+ 
+@@ -46,8 +50,13 @@ void Value::init_tagged_pointer(Tag t, void* p) {
+     if (sizeof(Value) == sizeof(uintptr_t)) {
+         *this->cast<uintptr_t>() = reinterpret_cast<uintptr_t>(p);
+         // For 64-bit, we rely on the pointer lower bits being zero.
++#if defined(SK_CPU_LENDIAN)
+         SkASSERT(!(fData8[0] & kTagMask));
+         fData8[0] |= SkTo<uint8_t>(t);
++#else
++        SkASSERT(!(fData8[kValueSize-1] & kTagMask));
++        fData8[kValueSize-1] |= SkTo<uint8_t>(t);
++#endif
+     } else {
+         // For 32-bit, we store the pointer in the upper word
+         SkASSERT(sizeof(Value) == sizeof(uintptr_t) * 2);
+@@ -179,19 +188,20 @@ private:
+         // Note: we picked kShortString == 0 to avoid setting explicitly below.
+         static_assert(SkToU8(Tag::kShortString) == 0, "please don't break this");
+ 
++#if defined(SK_CPU_LENDIAN)
+         // Since the first byte is occupied by the tag, we want the string chars [0..5] to land
+         // on bytes [1..6] => the fastest way is to read8 @(src - 1) (always safe, because the
+         // string requires a " prefix at the very least).
+         memcpy(s64, src - 1, 8);
+ 
+-#if defined(SK_CPU_LENDIAN)
+         // The mask for a max-length string (6), with a leading tag and trailing \0 is
+         // 0x00ffffffffffff00.  Accounting for the final left-shift, this becomes
+         // 0x0000ffffffffffff.
+         *s64 &= (0x0000ffffffffffffULL >> ((kMaxInlineStringSize - size) * 8)) // trailing \0s
+                     << 8;                                                      // tag byte
+ #else
+-        static_assert(false, "Big-endian builds are not supported at this time.");
++        memcpy(s64, src, 8);
++        *s64 &= 0xffffffffffff0000ULL << ((kMaxInlineStringSize - size) * 8);
+ #endif
+     }
+ };
+diff --git a/third_party/skia/modules/jsonreader/SkJSONReader.h b/third_party/skia/modules/jsonreader/SkJSONReader.h
+index 79e0858415..db8bd8317f 100644
+--- a/third_party/skia/modules/jsonreader/SkJSONReader.h
++++ b/third_party/skia/modules/jsonreader/SkJSONReader.h
+@@ -145,6 +145,7 @@ protected:
+     void init_tagged(Tag);
+     void init_tagged_pointer(Tag, void*);
+ 
++#if defined(SK_CPU_LENDIAN)
+     Tag getTag() const {
+         return static_cast<Tag>(fData8[0] & kTagMask);
+     }
+@@ -189,6 +190,19 @@ protected:
+                 ? reinterpret_cast<const T*>(this) + 0  // need all the bits
+                 : reinterpret_cast<const T*>(this) + 1; // skip the first word (where the tag lives)
+     }
++#else
++    Tag getTag() const {
++        return static_cast<Tag>(fData8[kValueSize-1] & kTagMask);
++    }
++
++    template <typename T>
++    const T* cast() const {
++        static_assert(sizeof (T) <=  sizeof(Value), "");
++        static_assert(alignof(T) <= alignof(Value), "");
++
++        return reinterpret_cast<const T*>(this);
++    }
++#endif
+ 
+     template <typename T>
+     T* cast() { return const_cast<T*>(const_cast<const Value*>(this)->cast<T>()); }
+@@ -210,11 +224,6 @@ private:
+     inline static constexpr size_t kValueSize = 8;
+ 
+     uint8_t fData8[kValueSize];
+-
+-#if !defined(SK_CPU_LENDIAN)
+-    // The current value layout assumes LE and will take some tweaking for BE.
+-    static_assert(false, "Big-endian builds are not supported at this time.");
+-#endif
+ };
+ 
+ class NullValue final : public Value {
+-- 
+2.52.0
+
+
+From 6374b085bfe28a8aaa08f64e31edb58fc5738a59 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 3 Oct 2018 18:59:24 +0200
+Subject: [PATCH 03/17] SkCodevPriv: Add missing include of SkEndian.h
+
+---
+ third_party/skia/src/codec/SkCodecPriv.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/third_party/skia/src/codec/SkCodecPriv.h b/third_party/skia/src/codec/SkCodecPriv.h
+index 0c18974e01..62b4b1fb3e 100644
+--- a/third_party/skia/src/codec/SkCodecPriv.h
++++ b/third_party/skia/src/codec/SkCodecPriv.h
+@@ -16,6 +16,7 @@
+ #include "modules/skcms/skcms.h"
+ #include "src/codec/SkColorPalette.h"
+ #include "src/core/SkColorData.h"
++#include "src/base/SkEndian.h"
+ 
+ #include <string_view>
+ 
+-- 
+2.52.0
+
+
+From 1f4d543e6ac073929dee3060a2c9f802b0190fd2 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Mar 2019 20:21:59 +0100
+Subject: [PATCH 04/17] skcms: skip swap in read_big_u{16,32} on BE
+
+---
+ third_party/skia/modules/skcms/skcms.cc | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/third_party/skia/modules/skcms/skcms.cc b/third_party/skia/modules/skcms/skcms.cc
+index 00b19eca7e..1578618282 100644
+--- a/third_party/skia/modules/skcms/skcms.cc
++++ b/third_party/skia/modules/skcms/skcms.cc
+@@ -379,21 +379,29 @@ enum {
+ static uint16_t read_big_u16(const uint8_t* ptr) {
+     uint16_t be;
+     memcpy(&be, ptr, sizeof(be));
++#if __BIG_ENDIAN__
++    return be;
++#else
+ #if defined(_MSC_VER)
+     return _byteswap_ushort(be);
+ #else
+     return __builtin_bswap16(be);
+ #endif
++#endif
+ }
+ 
+ static uint32_t read_big_u32(const uint8_t* ptr) {
+     uint32_t be;
+     memcpy(&be, ptr, sizeof(be));
++#if __BIG_ENDIAN__
++    return be;
++#else
+ #if defined(_MSC_VER)
+     return _byteswap_ulong(be);
+ #else
+     return __builtin_bswap32(be);
+ #endif
++#endif
+ }
+ 
+ static int32_t read_big_i32(const uint8_t* ptr) {
+-- 
+2.52.0
+
+
+From c60b1f11ab9a41d090e43aa572e529da657cfc56 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 27 Mar 2019 21:29:20 +0100
+Subject: [PATCH 05/17] skcms: Handle endianness in transform code
+
+---
+ .../skia/modules/skcms/src/Transform_inl.h    | 165 ++++++++++++++++++
+ 1 file changed, 165 insertions(+)
+
+diff --git a/third_party/skia/modules/skcms/src/Transform_inl.h b/third_party/skia/modules/skcms/src/Transform_inl.h
+index 0d48337bfc..405977454c 100644
+--- a/third_party/skia/modules/skcms/src/Transform_inl.h
++++ b/third_party/skia/modules/skcms/src/Transform_inl.h
+@@ -493,9 +493,11 @@ SI U32 gather_32(const uint8_t* p, I32 ix) {
+ }
+ 
+ SI U32 gather_24(const uint8_t* p, I32 ix) {
++#if !__BIG_ENDIAN__
+     // First, back up a byte.  Any place we're gathering from has a safe junk byte to read
+     // in front of it, either a previous table value, or some tag metadata.
+     p -= 1;
++#endif
+ 
+     // Load the i'th 24-bit value from p, and 1 extra byte.
+     auto load_24_32 = [p](int i) {
+@@ -536,8 +538,10 @@ SI U32 gather_24(const uint8_t* p, I32 ix) {
+ 
+ #if !defined(__arm__)
+     SI void gather_48(const uint8_t* p, I32 ix, U64* v) {
++#if !__BIG_ENDIAN__
+         // As in gather_24(), with everything doubled.
+         p -= 2;
++#endif
+ 
+         // Load the i'th 48-bit value from p, and 2 extra bytes.
+         auto load_48_64 = [p](int i) {
+@@ -600,9 +604,13 @@ SI F F_from_U8(U8 v) {
+ SI F F_from_U16_BE(U16 v) {
+     // All 16-bit ICC values are big-endian, so we byte swap before converting to float.
+     // MSVC catches the "loss" of data here in the portable path, so we also make sure to mask.
++#if !__BIG_ENDIAN__
+     U16 lo = (v >> 8),
+         hi = (v << 8) & 0xffff;
+     return cast<F>(lo|hi) * (1/65535.0f);
++#else
++    return cast<F>(v) * (1/65535.0f);
++#endif
+ }
+ 
+ SI U16 U16_from_F(F v) {
+@@ -641,9 +649,15 @@ SI F table(const skcms_Curve* curve, F v) {
+ SI void sample_clut_8(const uint8_t* grid_8, I32 ix, F* r, F* g, F* b) {
+     U32 rgb = gather_24(grid_8, ix);
+ 
++#if __BIG_ENDIAN__
++    *r = cast<F>((rgb >> 16) & 0xff) * (1/255.0f);
++    *g = cast<F>((rgb >>  8) & 0xff) * (1/255.0f);
++    *b = cast<F>((rgb >>  0) & 0xff) * (1/255.0f);
++#else
+     *r = cast<F>((rgb >>  0) & 0xff) * (1/255.0f);
+     *g = cast<F>((rgb >>  8) & 0xff) * (1/255.0f);
+     *b = cast<F>((rgb >> 16) & 0xff) * (1/255.0f);
++#endif
+ }
+ 
+ SI void sample_clut_8(const uint8_t* grid_8, I32 ix, F* r, F* g, F* b, F* a) {
+@@ -666,12 +680,18 @@ SI void sample_clut_16(const uint8_t* grid_16, I32 ix, F* r, F* g, F* b) {
+     // This strategy is much faster for 64-bit builds, and fine for 32-bit x86 too.
+     U64 rgb;
+     gather_48(grid_16, ix, &rgb);
++#if __BIG_ENDIAN__
++    *r = cast<F>((rgb >> 32) & 0xffff) * (1/65535.0f);
++    *g = cast<F>((rgb >> 16) & 0xffff) * (1/65535.0f);
++    *b = cast<F>((rgb >>  0) & 0xffff) * (1/65535.0f);
++#else
+     rgb = swap_endian_16x4(rgb);
+ 
+     *r = cast<F>((rgb >>  0) & 0xffff) * (1/65535.0f);
+     *g = cast<F>((rgb >> 16) & 0xffff) * (1/65535.0f);
+     *b = cast<F>((rgb >> 32) & 0xffff) * (1/65535.0f);
+ #endif
++#endif
+ }
+ 
+ SI void sample_clut_16(const uint8_t* grid_16, I32 ix, F* r, F* g, F* b, F* a) {
+@@ -896,10 +916,17 @@ STAGE(load_888, NoCtx) {
+ STAGE(load_8888, NoCtx) {
+     U32 rgba = load<U32>(src + 4*i);
+ 
++#if __BIG_ENDIAN__
++    r = cast<F>((rgba >> 24) & 0xff) * (1/255.0f);
++    g = cast<F>((rgba >> 16) & 0xff) * (1/255.0f);
++    b = cast<F>((rgba >>  8) & 0xff) * (1/255.0f);
++    a = cast<F>((rgba >>  0) & 0xff) * (1/255.0f);
++#else
+     r = cast<F>((rgba >>  0) & 0xff) * (1/255.0f);
+     g = cast<F>((rgba >>  8) & 0xff) * (1/255.0f);
+     b = cast<F>((rgba >> 16) & 0xff) * (1/255.0f);
+     a = cast<F>((rgba >> 24) & 0xff) * (1/255.0f);
++#endif
+ }
+ 
+ STAGE(load_1010102, NoCtx) {
+@@ -933,14 +960,30 @@ STAGE(load_161616LE, NoCtx) {
+     const uint16_t* rgb = (const uint16_t*)ptr; // cast to const uint16_t* to be safe.
+ #if defined(USING_NEON)
+     uint16x4x3_t v = vld3_u16(rgb);
++#if __BIG_ENDIAN__
++    r = cast<F>(swap_endian_16((U16)v.val[0])) * (1/65535.0f);
++    g = cast<F>(swap_endian_16((U16)v.val[1])) * (1/65535.0f);
++    b = cast<F>(swap_endian_16((U16)v.val[2])) * (1/65535.0f);
++#else
+     r = cast<F>((U16)v.val[0]) * (1/65535.0f);
+     g = cast<F>((U16)v.val[1]) * (1/65535.0f);
+     b = cast<F>((U16)v.val[2]) * (1/65535.0f);
++#endif
++#else
++#if __BIG_ENDIAN__
++    U32 R = load_3<U32>(rgb+0),
++        G = load_3<U32>(rgb+1),
++        B = load_3<U32>(rgb+2);
++    // R,G,B are little-endian 16-bit, so byte swap them before converting to float.
++    r = cast<F>((R & 0x00ff)<<8 | (R & 0xff00)>>8) * (1/65535.0f);
++    g = cast<F>((G & 0x00ff)<<8 | (G & 0xff00)>>8) * (1/65535.0f);
++    b = cast<F>((B & 0x00ff)<<8 | (B & 0xff00)>>8) * (1/65535.0f);
+ #else
+     r = cast<F>(load_3<U32>(rgb+0)) * (1/65535.0f);
+     g = cast<F>(load_3<U32>(rgb+1)) * (1/65535.0f);
+     b = cast<F>(load_3<U32>(rgb+2)) * (1/65535.0f);
+ #endif
++#endif
+ }
+ 
+ STAGE(load_16161616LE, NoCtx) {
+@@ -949,10 +992,25 @@ STAGE(load_16161616LE, NoCtx) {
+     const uint16_t* rgba = (const uint16_t*)ptr; // cast to const uint16_t* to be safe.
+ #if defined(USING_NEON)
+     uint16x4x4_t v = vld4_u16(rgba);
++#if __BIG_ENDIAN__
++    r = cast<F>(swap_endian_16((U16)v.val[0])) * (1/65535.0f);
++    g = cast<F>(swap_endian_16((U16)v.val[1])) * (1/65535.0f);
++    b = cast<F>(swap_endian_16((U16)v.val[2])) * (1/65535.0f);
++    a = cast<F>(swap_endian_16((U16)v.val[3])) * (1/65535.0f);
++#else
+     r = cast<F>((U16)v.val[0]) * (1/65535.0f);
+     g = cast<F>((U16)v.val[1]) * (1/65535.0f);
+     b = cast<F>((U16)v.val[2]) * (1/65535.0f);
+     a = cast<F>((U16)v.val[3]) * (1/65535.0f);
++#endif
++#else
++#if __BIG_ENDIAN__
++    U64 px = swap_endian_16x4(load<U64>(rgba));
++
++    r = cast<F>((px >> 48) & 0xffff) * (1/65535.0f);
++    g = cast<F>((px >> 32) & 0xffff) * (1/65535.0f);
++    b = cast<F>((px >> 16) & 0xffff) * (1/65535.0f);
++    a = cast<F>((px >>  0) & 0xffff) * (1/65535.0f);
+ #else
+     U64 px = load<U64>(rgba);
+ 
+@@ -961,6 +1019,7 @@ STAGE(load_16161616LE, NoCtx) {
+     b = cast<F>((px >> 32) & 0xffff) * (1/65535.0f);
+     a = cast<F>((px >> 48) & 0xffff) * (1/65535.0f);
+ #endif
++#endif
+ }
+ 
+ STAGE(load_161616BE, NoCtx) {
+@@ -969,9 +1028,20 @@ STAGE(load_161616BE, NoCtx) {
+     const uint16_t* rgb = (const uint16_t*)ptr; // cast to const uint16_t* to be safe.
+ #if defined(USING_NEON)
+     uint16x4x3_t v = vld3_u16(rgb);
++#if __BIG_ENDIAN__
++    r = cast<F>((U16)v.val[0]) * (1/65535.0f);
++    g = cast<F>((U16)v.val[1]) * (1/65535.0f);
++    b = cast<F>((U16)v.val[2]) * (1/65535.0f);
++#else
+     r = cast<F>(swap_endian_16((U16)v.val[0])) * (1/65535.0f);
+     g = cast<F>(swap_endian_16((U16)v.val[1])) * (1/65535.0f);
+     b = cast<F>(swap_endian_16((U16)v.val[2])) * (1/65535.0f);
++#endif
++#else
++#if __BIG_ENDIAN__
++    r = cast<F>(load_3<U32>(rgb+0)) * (1/65535.0f);
++    g = cast<F>(load_3<U32>(rgb+1)) * (1/65535.0f);
++    b = cast<F>(load_3<U32>(rgb+2)) * (1/65535.0f);
+ #else
+     U32 R = load_3<U32>(rgb+0),
+         G = load_3<U32>(rgb+1),
+@@ -981,6 +1051,7 @@ STAGE(load_161616BE, NoCtx) {
+     g = cast<F>((G & 0x00ff)<<8 | (G & 0xff00)>>8) * (1/65535.0f);
+     b = cast<F>((B & 0x00ff)<<8 | (B & 0xff00)>>8) * (1/65535.0f);
+ #endif
++#endif
+ }
+ 
+ STAGE(load_16161616BE, NoCtx) {
+@@ -989,10 +1060,25 @@ STAGE(load_16161616BE, NoCtx) {
+     const uint16_t* rgba = (const uint16_t*)ptr; // cast to const uint16_t* to be safe.
+ #if defined(USING_NEON)
+     uint16x4x4_t v = vld4_u16(rgba);
++#if __BIG_ENDIAN__
++    r = cast<F>((U16)v.val[0]) * (1/65535.0f);
++    g = cast<F>((U16)v.val[1]) * (1/65535.0f);
++    b = cast<F>((U16)v.val[2]) * (1/65535.0f);
++    a = cast<F>((U16)v.val[3]) * (1/65535.0f);
++#else
+     r = cast<F>(swap_endian_16((U16)v.val[0])) * (1/65535.0f);
+     g = cast<F>(swap_endian_16((U16)v.val[1])) * (1/65535.0f);
+     b = cast<F>(swap_endian_16((U16)v.val[2])) * (1/65535.0f);
+     a = cast<F>(swap_endian_16((U16)v.val[3])) * (1/65535.0f);
++#endif
++#else
++#if __BIG_ENDIAN__
++    U64 px = load<U64>(rgba);
++
++    r = cast<F>((px >> 48) & 0xffff) * (1/65535.0f);
++    g = cast<F>((px >> 32) & 0xffff) * (1/65535.0f);
++    b = cast<F>((px >> 16) & 0xffff) * (1/65535.0f);
++    a = cast<F>((px >>  0) & 0xffff) * (1/65535.0f);
+ #else
+     U64 px = swap_endian_16x4(load<U64>(rgba));
+ 
+@@ -1001,6 +1087,7 @@ STAGE(load_16161616BE, NoCtx) {
+     b = cast<F>((px >> 32) & 0xffff) * (1/65535.0f);
+     a = cast<F>((px >> 48) & 0xffff) * (1/65535.0f);
+ #endif
++#endif
+ }
+ 
+ STAGE(load_hhh, NoCtx) {
+@@ -1034,10 +1121,17 @@ STAGE(load_hhhh, NoCtx) {
+         A = (U16)v.val[3];
+ #else
+     U64 px = load<U64>(rgba);
++#if __BIG_ENDIAN__
++    U16 R = cast<U16>((px >> 48) & 0xffff),
++        G = cast<U16>((px >> 32) & 0xffff),
++        B = cast<U16>((px >> 16) & 0xffff),
++        A = cast<U16>((px >>  0) & 0xffff);
++#else
+     U16 R = cast<U16>((px >>  0) & 0xffff),
+         G = cast<U16>((px >> 16) & 0xffff),
+         B = cast<U16>((px >> 32) & 0xffff),
+         A = cast<U16>((px >> 48) & 0xffff);
++#endif
+ #endif
+     r = F_from_Half(R);
+     g = F_from_Half(G);
+@@ -1344,10 +1438,17 @@ FINAL_STAGE(store_888, NoCtx) {
+ }
+ 
+ FINAL_STAGE(store_8888, NoCtx) {
++#if __BIG_ENDIAN__
++    store(dst + 4*i, cast<U32>(to_fixed(r * 255)) << 24
++                   | cast<U32>(to_fixed(g * 255)) << 16
++	           | cast<U32>(to_fixed(b * 255)) <<  8
++	           | cast<U32>(to_fixed(a * 255)) <<  0);
++#else
+     store(dst + 4*i, cast<U32>(to_fixed(r * 255)) <<  0
+                    | cast<U32>(to_fixed(g * 255)) <<  8
+                    | cast<U32>(to_fixed(b * 255)) << 16
+                    | cast<U32>(to_fixed(a * 255)) << 24);
++#endif
+ }
+ 
+ FINAL_STAGE(store_101010x_XR, NoCtx) {
+@@ -1377,16 +1478,31 @@ FINAL_STAGE(store_161616LE, NoCtx) {
+     uint16_t* rgb = (uint16_t*)ptr;          // for this cast to uint16_t* to be safe.
+ #if defined(USING_NEON)
+     uint16x4x3_t v = {{
++#if __BIG_ENDIAN__
++	(uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(r))),
++	(uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(g))),
++	(uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(b))),
++#else
+         (uint16x4_t)U16_from_F(r),
+         (uint16x4_t)U16_from_F(g),
+         (uint16x4_t)U16_from_F(b),
++#endif
+     }};
+     vst3_u16(rgb, v);
++#else
++#if __BIG_ENDIAN__
++    U32 R = to_fixed(r * 65535),
++        G = to_fixed(g * 65535),
++      B = to_fixed(b * 65535);
++    store_3(rgb+0, cast<U16>((R & 0x00ff) << 8 | (R & 0xff00) >> 8) );
++    store_3(rgb+1, cast<U16>((G & 0x00ff) << 8 | (G & 0xff00) >> 8) );
++    store_3(rgb+2, cast<U16>((B & 0x00ff) << 8 | (B & 0xff00) >> 8) );
+ #else
+     store_3(rgb+0, U16_from_F(r));
+     store_3(rgb+1, U16_from_F(g));
+     store_3(rgb+2, U16_from_F(b));
+ #endif
++#endif
+ 
+ }
+ 
+@@ -1396,12 +1512,26 @@ FINAL_STAGE(store_16161616LE, NoCtx) {
+     uint16_t* rgba = (uint16_t*)ptr;        // for this cast to uint16_t* to be safe.
+ #if defined(USING_NEON)
+     uint16x4x4_t v = {{
++#if __BIG_ENDIAN__
++	(uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(r))),
++	(uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(g))),
++	(uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(b))),
++	(uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(a))),
++#else
+         (uint16x4_t)U16_from_F(r),
+         (uint16x4_t)U16_from_F(g),
+         (uint16x4_t)U16_from_F(b),
+         (uint16x4_t)U16_from_F(a),
++#endif
+     }};
+     vst4_u16(rgba, v);
++#else
++#if __BIG_ENDIAN__
++    U64 px = cast<U64>(to_fixed(r * 65535)) << 48
++           | cast<U64>(to_fixed(g * 65535)) << 32
++           | cast<U64>(to_fixed(b * 65535)) << 16
++           | cast<U64>(to_fixed(a * 65535)) <<  0;
++    store(rgba, swap_endian_16x4(px));
+ #else
+     U64 px = cast<U64>(to_fixed(r * 65535)) <<  0
+            | cast<U64>(to_fixed(g * 65535)) << 16
+@@ -1409,6 +1539,7 @@ FINAL_STAGE(store_16161616LE, NoCtx) {
+            | cast<U64>(to_fixed(a * 65535)) << 48;
+     store(rgba, px);
+ #endif
++#endif
+ }
+ 
+ FINAL_STAGE(store_161616BE, NoCtx) {
+@@ -1417,11 +1548,22 @@ FINAL_STAGE(store_161616BE, NoCtx) {
+     uint16_t* rgb = (uint16_t*)ptr;          // for this cast to uint16_t* to be safe.
+ #if defined(USING_NEON)
+     uint16x4x3_t v = {{
++#if __BIG_ENDIAN__
++	(uint16x4_t)U16_from_F(r),
++	(uint16x4_t)U16_from_F(g),
++	(uint16x4_t)U16_from_F(b),
++#else
+         (uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(r))),
+         (uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(g))),
+         (uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(b))),
++#endif
+     }};
+     vst3_u16(rgb, v);
++#else
++#if __BIG_ENDIAN__
++    store_3(rgb+0, U16_from_F(r));
++    store_3(rgb+1, U16_from_F(g));
++    store_3(rgb+2, U16_from_F(b));
+ #else
+     U32 R = to_fixed(r * 65535),
+         G = to_fixed(g * 65535),
+@@ -1430,6 +1572,7 @@ FINAL_STAGE(store_161616BE, NoCtx) {
+     store_3(rgb+1, cast<U16>((G & 0x00ff) << 8 | (G & 0xff00) >> 8) );
+     store_3(rgb+2, cast<U16>((B & 0x00ff) << 8 | (B & 0xff00) >> 8) );
+ #endif
++#endif
+ 
+ }
+ 
+@@ -1439,12 +1582,26 @@ FINAL_STAGE(store_16161616BE, NoCtx) {
+     uint16_t* rgba = (uint16_t*)ptr;        // for this cast to uint16_t* to be safe.
+ #if defined(USING_NEON)
+     uint16x4x4_t v = {{
++#if __BIG_ENDIAN__
++	(uint16x4_t)U16_from_F(r),
++	(uint16x4_t)U16_from_F(g),
++	(uint16x4_t)U16_from_F(b),
++	(uint16x4_t)U16_from_F(a),
++#else
+         (uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(r))),
+         (uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(g))),
+         (uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(b))),
+         (uint16x4_t)swap_endian_16(cast<U16>(U16_from_F(a))),
++#endif
+     }};
+     vst4_u16(rgba, v);
++#else
++#if __BIG_ENDIAN__
++    U64 px = cast<U64>(to_fixed(r * 65535)) << 48
++           | cast<U64>(to_fixed(g * 65535)) << 32
++           | cast<U64>(to_fixed(b * 65535)) << 16
++           | cast<U64>(to_fixed(a * 65535)) <<  0;
++    store(rgba, px);
+ #else
+     U64 px = cast<U64>(to_fixed(r * 65535)) <<  0
+            | cast<U64>(to_fixed(g * 65535)) << 16
+@@ -1452,6 +1609,7 @@ FINAL_STAGE(store_16161616BE, NoCtx) {
+            | cast<U64>(to_fixed(a * 65535)) << 48;
+     store(rgba, swap_endian_16x4(px));
+ #endif
++#endif
+ }
+ 
+ FINAL_STAGE(store_hhh, NoCtx) {
+@@ -1493,12 +1651,19 @@ FINAL_STAGE(store_hhhh, NoCtx) {
+         (uint16x4_t)A,
+     }};
+     vst4_u16(rgba, v);
++#else
++#if __BIG_ENDIAN__
++    store(rgba, cast<U64>(R) << 48
++	      | cast<U64>(G) << 32
++	      | cast<U64>(B) << 16
++	      | cast<U64>(A) <<  0);
+ #else
+     store(rgba, cast<U64>(R) <<  0
+               | cast<U64>(G) << 16
+               | cast<U64>(B) << 32
+               | cast<U64>(A) << 48);
+ #endif
++#endif
+ }
+ 
+ FINAL_STAGE(store_fff, NoCtx) {
+-- 
+2.52.0
+
+
+From b68f8cb8c1582e06cc8a2025419df66c312cbbdf Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 6 Apr 2019 23:32:18 +0200
+Subject: [PATCH 06/17] SkRasterPipeline_opts: Handle endianness in 32-bit
+ pixel load/store
+
+---
+ .../skia/src/opts/SkRasterPipeline_opts.h     | 40 +++++++++++++++++++
+ 1 file changed, 40 insertions(+)
+
+diff --git a/third_party/skia/src/opts/SkRasterPipeline_opts.h b/third_party/skia/src/opts/SkRasterPipeline_opts.h
+index b7e8788d94..3c695a9c06 100644
+--- a/third_party/skia/src/opts/SkRasterPipeline_opts.h
++++ b/third_party/skia/src/opts/SkRasterPipeline_opts.h
+@@ -2003,10 +2003,17 @@ SI void from_4444(U16 _4444, F* r, F* g, F* b, F* a) {
+     *a = cast(wide & (15<< 0)) * (1.0f / (15<< 0));
+ }
+ SI void from_8888(U32 _8888, F* r, F* g, F* b, F* a) {
++#ifdef SK_CPU_BENDIAN
++    *r = cast((_8888 >> 24)       ) * (1/255.0f);
++    *g = cast((_8888 >> 16) & 0xff) * (1/255.0f);
++    *b = cast((_8888 >>  8) & 0xff) * (1/255.0f);
++    *a = cast((_8888      ) & 0xff) * (1/255.0f);
++#else
+     *r = cast((_8888      ) & 0xff) * (1/255.0f);
+     *g = cast((_8888 >>  8) & 0xff) * (1/255.0f);
+     *b = cast((_8888 >> 16) & 0xff) * (1/255.0f);
+     *a = cast((_8888 >> 24)       ) * (1/255.0f);
++#endif
+ }
+ SI void from_88(U16 _88, F* r, F* g) {
+     U32 wide = expand(_88);
+@@ -2593,10 +2600,17 @@ HIGHP_STAGE(srcover_rgba_8888, const SkRasterPipelineContexts::MemoryCtx* ctx) {
+     auto ptr = ptr_at_xy<uint32_t>(ctx, dx,dy);
+ 
+     U32 dst = load<U32>(ptr);
++#ifdef SK_CPU_BENDIAN
++    dr = cast((dst >> 24)       );
++    dg = cast((dst >> 16) & 0xff);
++    db = cast((dst >>  8) & 0xff);
++    da = cast((dst      ) & 0xff);
++#else
+     dr = cast((dst      ) & 0xff);
+     dg = cast((dst >>  8) & 0xff);
+     db = cast((dst >> 16) & 0xff);
+     da = cast((dst >> 24)       );
++#endif
+     // {dr,dg,db,da} are in [0,255]
+     // { r, g, b, a} are in [0,  1] (but may be out of gamut)
+ 
+@@ -2607,10 +2621,17 @@ HIGHP_STAGE(srcover_rgba_8888, const SkRasterPipelineContexts::MemoryCtx* ctx) {
+     // { r, g, b, a} are now in [0,255]  (but may be out of gamut)
+ 
+     // to_unorm() clamps back to gamut.  Scaling by 1 since we're already 255-based.
++#ifdef SK_CPU_BENDIAN
++    dst = to_unorm(r, /*scale=*/1, /*bias=*/0.f, /*maxI=*/255) << 24
++        | to_unorm(g, /*scale=*/1, /*bias=*/0.f, /*maxI=*/255) << 16
++        | to_unorm(b, /*scale=*/1, /*bias=*/0.f, /*maxI=*/255) << 8
++        | to_unorm(a, /*scale=*/1, /*bias=*/0.f, /*maxI=*/255);
++#else
+     dst = to_unorm(r, /*scale=*/1, /*bias=*/0.f, /*maxI=*/255)
+         | to_unorm(g, /*scale=*/1, /*bias=*/0.f, /*maxI=*/255) <<  8
+         | to_unorm(b, /*scale=*/1, /*bias=*/0.f, /*maxI=*/255) << 16
+         | to_unorm(a, /*scale=*/1, /*bias=*/0.f, /*maxI=*/255) << 24;
++#endif
+     store(ptr, dst);
+ }
+ 
+@@ -3163,10 +3184,17 @@ HIGHP_STAGE(gather_8888, const SkRasterPipelineContexts::GatherCtx* ctx) {
+ HIGHP_STAGE(store_8888, const SkRasterPipelineContexts::MemoryCtx* ctx) {
+     auto ptr = ptr_at_xy<uint32_t>(ctx, dx,dy);
+ 
++#ifdef SK_CPU_BENDIAN
++    U32 px = to_unorm(r, 255) << 24
++           | to_unorm(g, 255) << 16
++           | to_unorm(b, 255) <<  8
++           | to_unorm(a, 255);
++#else
+     U32 px = to_unorm(r, 255)
+            | to_unorm(g, 255) <<  8
+            | to_unorm(b, 255) << 16
+            | to_unorm(a, 255) << 24;
++#endif
+     store(ptr, px);
+ }
+ 
+@@ -6366,11 +6394,18 @@ SI void from_8888(U32 rgba, U16* r, U16* g, U16* b, U16* a) {
+     };
+ #endif
+ #if !defined(SKRP_CPU_LSX)
++#ifdef SK_CPU_BENDIAN
++    *r = cast_U16(rgba >>   16) >>  8;
++    *g = cast_U16(rgba >>   16) & 255;
++    *b = cast_U16(rgba & 65535) >>  8;
++    *a = cast_U16(rgba & 65535) & 255;
++#else
+     *r = cast_U16(rgba & 65535) & 255;
+     *g = cast_U16(rgba & 65535) >>  8;
+     *b = cast_U16(rgba >>   16) & 255;
+     *a = cast_U16(rgba >>   16) >>  8;
+ #endif
++#endif
+ }
+ 
+ SI void load_8888_(const uint32_t* ptr, U16* r, U16* g, U16* b, U16* a) {
+@@ -6422,11 +6457,16 @@ SI void store_8888_(uint32_t* ptr, U16 r, U16 g, U16 b, U16 a) {
+         cast<U8>(a),
+     }};
+     vst4_u8((uint8_t*)(ptr), rgba);
++#else
++#ifdef SK_CPU_BENDIAN
++    store(ptr, cast<U32>((r<<8) | g) << 16
++	     | cast<U32>((b<<8) | a) << 0);
+ #else
+     store(ptr, cast<U32>(r | (g<<8)) <<  0
+              | cast<U32>(b | (a<<8)) << 16);
+ #endif
+ #endif
++#endif
+ }
+ 
+ LOWP_STAGE_PP(load_8888, const SkRasterPipelineContexts::MemoryCtx* ctx) {
+-- 
+2.52.0
+
+
+From ec639df975383e536d1dbc98dba7568268cd53c0 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 7 Apr 2019 12:00:05 +0200
+Subject: [PATCH 07/17] SkPixmap: Fix getColor on pixmaps with non-premul alpha
+
+The trick to use SkSwizzle_BGRA_to_PMColor() to get an SkColor from an
+SkPMColor only works on LE, because an SkColor is actually fixed as
+ARGB in register order, so on BE it becomes ARGB is memory order, not BGRA.
+---
+ third_party/skia/src/core/SkPixmap.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/third_party/skia/src/core/SkPixmap.cpp b/third_party/skia/src/core/SkPixmap.cpp
+index 1b11d8649f..e3720e7cbf 100644
+--- a/third_party/skia/src/core/SkPixmap.cpp
++++ b/third_party/skia/src/core/SkPixmap.cpp
+@@ -195,7 +195,8 @@ SkColor SkPixmap::getColor(int x, int y) const {
+     const bool needsUnpremul = (kPremul_SkAlphaType == fInfo.alphaType());
+     auto toColor = [needsUnpremul](uint32_t maybePremulColor) {
+         return needsUnpremul ? SkUnPreMultiply::PMColorToColor(maybePremulColor)
+-                             : SkSwizzle_BGRA_to_PMColor(maybePremulColor);
++                             : SkColorSetARGB(SkGetPackedA32(maybePremulColor), SkGetPackedR32(maybePremulColor),
++					      SkGetPackedG32(maybePremulColor), SkGetPackedB32(maybePremulColor));
+     };
+ 
+     switch (this->colorType()) {
+-- 
+2.52.0
+
+
+From 579721d629ce1f07c3b00a9d7607abfe139fffb9 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 7 Apr 2019 21:12:17 +0200
+Subject: [PATCH 08/17] skcms: skip swap in eval_curve on BE
+
+---
+ third_party/skia/modules/skcms/skcms.cc | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/third_party/skia/modules/skcms/skcms.cc b/third_party/skia/modules/skcms/skcms.cc
+index 1578618282..d97c67b286 100644
+--- a/third_party/skia/modules/skcms/skcms.cc
++++ b/third_party/skia/modules/skcms/skcms.cc
+@@ -317,10 +317,15 @@ static float eval_curve(const skcms_Curve* curve, float x) {
+         uint16_t be_l, be_h;
+         memcpy(&be_l, curve->table_16 + 2*lo, 2);
+         memcpy(&be_h, curve->table_16 + 2*hi, 2);
++#if __BIG_ENDIAN__
++        l = be_l * (1/65535.0f);
++        h = be_h * (1/65535.0f);
++#else
+         uint16_t le_l = ((be_l << 8) | (be_l >> 8)) & 0xffff;
+         uint16_t le_h = ((be_h << 8) | (be_h >> 8)) & 0xffff;
+         l = le_l * (1/65535.0f);
+         h = le_h * (1/65535.0f);
++#endif
+     }
+     return l + (h-l)*t;
+ }
+-- 
+2.52.0
+
+
+From 5faaebaae41070f1733338485e0426a0806b0ccd Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 18 May 2019 11:20:48 +0200
+Subject: [PATCH 09/17] SkColor: Fix conversion between SkColor4f and SkColor
+
+SkColor4f is a vector of 4 floats with the fixed component order
+<R, G, B, A>.  SkColor on the other hand is defined as a single
+32-bit number with the value 0xAARRGGBB.  When converting this
+to/from a vector using Sk4f_fromL32 and Sk4f_toL32, the vector
+becomes <A, R, G, B> on BE and <B, G, R, A> on LE.  Thus different
+swizzles are needed to get to/from the order <R, G, B, A>.
+
+Fix courtesy of awilfox.
+---
+ third_party/skia/src/core/SkColor.cpp | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/third_party/skia/src/core/SkColor.cpp b/third_party/skia/src/core/SkColor.cpp
+index 48ec34e7ec..0d9e72c1c6 100644
+--- a/third_party/skia/src/core/SkColor.cpp
++++ b/third_party/skia/src/core/SkColor.cpp
+@@ -134,13 +134,29 @@ SkColor SkHSVToColor(U8CPU a, const SkScalar hsv[3]) {
+ template <>
+ SkColor4f SkColor4f::FromColor(SkColor bgra) {
+     SkColor4f rgba;
+-    swizzle_rb(Sk4f_fromL32(bgra)).store(rgba.vec());
++    skvx::float4 c4f = Sk4f_fromL32(bgra);
++#ifdef SK_CPU_BENDIAN
++    // ARGB -> RGBA
++    c4f = skvx::shuffle<1, 2, 3, 0>(c4f);
++#else
++    // BGRA -> RGBA
++    c4f = swizzle_rb(c4f);
++#endif
++    c4f.store(rgba.vec());
+     return rgba;
+ }
+ 
+ template <>
+ SkColor SkColor4f::toSkColor() const {
+-    return Sk4f_toL32(swizzle_rb(skvx::float4::Load(this->vec())));
++    skvx::float4 c4f = skvx::float4::Load(this->vec());
++#ifdef SK_CPU_BENDIAN
++    // RGBA -> ARGB
++    c4f = skvx::shuffle<3, 0, 1, 2>(c4f);
++#else
++    // RGBA -> BGRA
++    c4f = swizzle_rb(c4f);
++#endif
++    return Sk4f_toL32(c4f);
+ }
+ 
+ template <>
+-- 
+2.52.0
+
+
+From 9dc1d4a651b1615da195bacda3cb5c53b3d99db5 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 18 May 2019 11:32:47 +0200
+Subject: [PATCH 10/17] Remove some endianness asserts
+
+---
+ third_party/skia/include/private/base/SkLoadUserConfig.h | 2 ++
+ third_party/skia/src/core/Sk4px.h                        | 1 -
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/third_party/skia/include/private/base/SkLoadUserConfig.h b/third_party/skia/include/private/base/SkLoadUserConfig.h
+index 9f949782c0..85450d08e1 100644
+--- a/third_party/skia/include/private/base/SkLoadUserConfig.h
++++ b/third_party/skia/include/private/base/SkLoadUserConfig.h
+@@ -53,6 +53,8 @@
+ #  error "must define either SK_CPU_LENDIAN or SK_CPU_BENDIAN"
+ #endif
+ 
++#define I_ACKNOWLEDGE_SKIA_DOES_NOT_SUPPORT_BIG_ENDIAN
++
+ #if defined(SK_CPU_BENDIAN) && !defined(I_ACKNOWLEDGE_SKIA_DOES_NOT_SUPPORT_BIG_ENDIAN)
+     #error "The Skia team is not endian-savvy enough to support big-endian CPUs."
+     #error "If you still want to use Skia,"
+diff --git a/third_party/skia/src/core/Sk4px.h b/third_party/skia/src/core/Sk4px.h
+index d5d481e7e3..099577d77c 100644
+--- a/third_party/skia/src/core/Sk4px.h
++++ b/third_party/skia/src/core/Sk4px.h
+@@ -27,7 +27,6 @@ public:
+ 
+     // RGBA rgba XYZW xyzw -> AAAA aaaa WWWW wwww
+     Sk4px alphas() const {
+-        static_assert(SK_A32_SHIFT == 24, "This method assumes little-endian.");
+         return Sk4px(skvx::shuffle<3,3,3,3, 7,7,7,7, 11,11,11,11, 15,15,15,15>(fV));
+     }
+     Sk4px inv() const { return Sk4px(skvx::byte16(255) - fV); }
+-- 
+2.52.0
+
+
+From 8347cff514521fe36dfb7885586b066e79d8d42a Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:40:58 +0100
+Subject: [PATCH 11/17] Fix RGBA and BGRA shifts on big endian
+
+---
+ third_party/skia/src/core/SkColorPriv.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/third_party/skia/src/core/SkColorPriv.h b/third_party/skia/src/core/SkColorPriv.h
+index 94a791138b..7235ab26fd 100644
+--- a/third_party/skia/src/core/SkColorPriv.h
++++ b/third_party/skia/src/core/SkColorPriv.h
+@@ -64,6 +64,20 @@ static inline U8CPU SkUnitScalarClampToByte(SkScalar x) {
+  *  Here we enforce this constraint.
+  */
+ 
++#if defined(SK_CPU_BENDIAN)
++
++#define SK_RGBA_R32_SHIFT   24
++#define SK_RGBA_G32_SHIFT   16
++#define SK_RGBA_B32_SHIFT   8
++#define SK_RGBA_A32_SHIFT   0
++
++#define SK_BGRA_B32_SHIFT   24
++#define SK_BGRA_G32_SHIFT   16
++#define SK_BGRA_R32_SHIFT   8
++#define SK_BGRA_A32_SHIFT   0
++
++#else
++
+ #define SK_RGBA_R32_SHIFT   0
+ #define SK_RGBA_G32_SHIFT   8
+ #define SK_RGBA_B32_SHIFT   16
+@@ -74,6 +88,8 @@ static inline U8CPU SkUnitScalarClampToByte(SkScalar x) {
+ #define SK_BGRA_R32_SHIFT   16
+ #define SK_BGRA_A32_SHIFT   24
+ 
++#endif
++
+ #if defined(SK_PMCOLOR_IS_RGBA) || defined(SK_PMCOLOR_IS_BGRA)
+     #error "Configure PMCOLOR by setting SK_R32_SHIFT."
+ #endif
+-- 
+2.52.0
+
+
+From 65a9d960a933b582b04cc69c315874b876e62b56 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:42:39 +0100
+Subject: [PATCH 12/17] Avoid redefining SK_G32_SHIFT and SK_A32_SHIFT
+
+---
+ third_party/skia/include/core/SkTypes.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/third_party/skia/include/core/SkTypes.h b/third_party/skia/include/core/SkTypes.h
+index 67236b38d0..8b48810cc5 100644
+--- a/third_party/skia/include/core/SkTypes.h
++++ b/third_party/skia/include/core/SkTypes.h
+@@ -33,6 +33,8 @@
+ #  undef SK_DIRECT3D
+ #endif
+ 
++#if !defined(SK_R32_SHIFT) || !defined(SK_G32_SHIFT) || !defined(SK_B32_SHIFT) || !defined(SK_A32_SHIFT)
++
+ // If SK_R32_SHIFT is set, we'll use that to choose RGBA or BGRA.
+ // If not, we'll default to RGBA everywhere except BGRA on Windows.
+ #if defined(SK_R32_SHIFT)
+@@ -52,6 +54,8 @@
+ #define SK_G32_SHIFT 8
+ #define SK_A32_SHIFT 24
+ 
++#endif
++
+ /**
+  * SK_PMCOLOR_BYTE_ORDER can be used to query the byte order of SkPMColor at compile time.
+  */
+-- 
+2.52.0
+
+
+From 876c146153cc3f40d3c93d3069d58f695ebb1c31 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 7 Mar 2021 18:51:58 +0100
+Subject: [PATCH 13/17] SkRasterPipelineBlitter: Fix fMemsetColor handling on
+ big endian
+
+---
+ .../skia/src/core/SkRasterPipelineBlitter.cpp  | 18 +++++++++++++++---
+ 1 file changed, 15 insertions(+), 3 deletions(-)
+
+diff --git a/third_party/skia/src/core/SkRasterPipelineBlitter.cpp b/third_party/skia/src/core/SkRasterPipelineBlitter.cpp
+index 7ca9a43d17..8a78f40018 100644
+--- a/third_party/skia/src/core/SkRasterPipelineBlitter.cpp
++++ b/third_party/skia/src/core/SkRasterPipelineBlitter.cpp
+@@ -456,15 +456,27 @@ SkBlitter* SkRasterPipelineBlitter::Create(const SkPixmap& dst,
+                     memset(p, c, w);
+                     p = SkTAddOffset<void>(p, dst->rowBytes());
+                 }
+-            }; break;
++            };
++#if defined(SK_CPU_BENDIAN)
++	    blitter->fMemsetColor >>= 56;
++#endif
++	    break;
+ 
+             case 1: blitter->fMemset2D = [](SkPixmap* dst, int x,int y, int w,int h, uint64_t c) {
+                 SkOpts::rect_memset16(dst->writable_addr16(x,y), c, w, dst->rowBytes(), h);
+-            }; break;
++            };
++#if defined(SK_CPU_BENDIAN)
++	    blitter->fMemsetColor >>= 48;
++#endif
++	    break;
+ 
+             case 2: blitter->fMemset2D = [](SkPixmap* dst, int x,int y, int w,int h, uint64_t c) {
+                 SkOpts::rect_memset32(dst->writable_addr32(x,y), c, w, dst->rowBytes(), h);
+-            }; break;
++            };
++#if defined(SK_CPU_BENDIAN)
++	    blitter->fMemsetColor >>= 32;
++#endif
++	    break;
+ 
+             case 3: blitter->fMemset2D = [](SkPixmap* dst, int x,int y, int w,int h, uint64_t c) {
+                 SkOpts::rect_memset64(dst->writable_addr64(x,y), c, w, dst->rowBytes(), h);
+-- 
+2.52.0
+
+
+From e8784b2b7697d6b5b3e910e1ed7422837ffad849 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 7 Mar 2021 18:56:28 +0100
+Subject: [PATCH 14/17] Add kARGB_8888_SkColorType and kABGR_8888_SkColorType
+
+---
+ third_party/skia/include/core/SkColorType.h   |  7 ++++
+ .../include/private/gpu/ganesh/GrTypesPriv.h  |  2 +
+ third_party/skia/src/core/SkConvertPixels.cpp | 24 ++++++++++++
+ third_party/skia/src/core/SkImageInfo.cpp     |  4 ++
+ third_party/skia/src/core/SkImageInfoPriv.h   |  6 +++
+ .../skia/src/core/SkMipmapHQDownSampler.cpp   |  2 +
+ third_party/skia/src/core/SkPixmap.cpp        | 38 +++++++++++++++++++
+ .../skia/src/core/SkRasterPipeline.cpp        | 27 +++++++++++++
+ .../skia/src/core/SkRasterPipelineBlitter.cpp |  2 +
+ .../skia/src/core/SkRasterPipelineOpList.h    |  2 +
+ .../skia/src/opts/SkRasterPipeline_opts.h     | 29 ++++++++++++++
+ .../skia/src/shaders/SkImageShader.cpp        |  9 +++++
+ third_party/skia/tools/HashAndEncode.cpp      |  2 +
+ 13 files changed, 154 insertions(+)
+
+diff --git a/third_party/skia/include/core/SkColorType.h b/third_party/skia/include/core/SkColorType.h
+index 320c511148..449c941989 100644
+--- a/third_party/skia/include/core/SkColorType.h
++++ b/third_party/skia/include/core/SkColorType.h
+@@ -54,6 +54,13 @@ enum SkColorType : int {
+     // relative to kRGBA_8888.
+     //   Bits: [A:31..24 R:23..16 G:15..8 B:7..0]
+     kBGRA_8888_SkColorType,
++    // Four channel ARGB data (8 bits per channel) packed into a BE 32-bit word.
++    //   Bits: [A:31..24 R:23..16 G:15..8 B:7..0]
++    kARGB_8888_SkColorType,
++    // Four channel ABGR data (8 bits per channel) packed into a BE 32-bit word. R and B are swapped
++    // relative to kARGB_8888.
++    //   Bits: [A:31..24 B:23..16 G:15..8 R:7..0]
++    kABGR_8888_SkColorType,
+     // Four channel RGBA data (10 bits per color, 2 bits for alpha) packed into a LE 32-bit word.
+     //   Bits: [A:31..30 B:29..20 G:19..10 R:9..0]
+     kRGBA_1010102_SkColorType,
+diff --git a/third_party/skia/include/private/gpu/ganesh/GrTypesPriv.h b/third_party/skia/include/private/gpu/ganesh/GrTypesPriv.h
+index 09c9a3146d..c6974301d7 100644
+--- a/third_party/skia/include/private/gpu/ganesh/GrTypesPriv.h
++++ b/third_party/skia/include/private/gpu/ganesh/GrTypesPriv.h
+@@ -639,6 +639,8 @@ static constexpr GrColorType SkColorTypeToGrColorType(SkColorType ct) {
+         case kSRGBA_8888_SkColorType:         return GrColorType::kRGBA_8888_SRGB;
+         case kRGB_888x_SkColorType:           return GrColorType::kRGB_888x;
+         case kBGRA_8888_SkColorType:          return GrColorType::kBGRA_8888;
++        case kARGB_8888_SkColorType:          return GrColorType::kUnknown;
++        case kABGR_8888_SkColorType:          return GrColorType::kUnknown;
+         case kGray_8_SkColorType:             return GrColorType::kGray_8;
+         case kRGBA_F16Norm_SkColorType:       return GrColorType::kRGBA_F16_Clamped;
+         case kRGBA_F16_SkColorType:           return GrColorType::kRGBA_F16;
+diff --git a/third_party/skia/src/core/SkConvertPixels.cpp b/third_party/skia/src/core/SkConvertPixels.cpp
+index f6c5136c3a..557bcf0d5b 100644
+--- a/third_party/skia/src/core/SkConvertPixels.cpp
++++ b/third_party/skia/src/core/SkConvertPixels.cpp
+@@ -143,9 +143,14 @@ static bool convert_to_alpha8(const SkImageInfo& dstInfo,       void* vdst, size
+             return true;
+         }
+ 
++#if defined(SK_CPU_BENDIAN)
++        case kARGB_8888_SkColorType:
++        case kABGR_8888_SkColorType: {
++#else
+         case kBGRA_8888_SkColorType:
+         case kRGBA_8888_SkColorType:
+         case kSRGBA_8888_SkColorType: {
++#endif
+             auto src32 = (const uint32_t*) src;
+             for (int y = 0; y < srcInfo.height(); y++) {
+                 for (int x = 0; x < srcInfo.width(); x++) {
+@@ -157,6 +162,25 @@ static bool convert_to_alpha8(const SkImageInfo& dstInfo,       void* vdst, size
+             return true;
+         }
+ 
++#if defined(SK_CPU_BENDIAN)
++        case kBGRA_8888_SkColorType:
++        case kRGBA_8888_SkColorType:
++        case kSRGBA_8888_SkColorType: {
++#else
++        case kARGB_8888_SkColorType:
++        case kABGR_8888_SkColorType: {
++#endif
++            auto src32 = (const uint32_t*) src;
++            for (int y = 0; y < srcInfo.height(); y++) {
++                for (int x = 0; x < srcInfo.width(); x++) {
++                    dst[x] = src32[x] & 0xff;
++                }
++                dst = SkTAddOffset<uint8_t>(dst, dstRB);
++                src32 = SkTAddOffset<const uint32_t>(src32, srcRB);
++            }
++            return true;
++        }
++
+         case kRGBA_1010102_SkColorType:
+         case kBGRA_1010102_SkColorType: {
+             auto src32 = (const uint32_t*) src;
+diff --git a/third_party/skia/src/core/SkImageInfo.cpp b/third_party/skia/src/core/SkImageInfo.cpp
+index 232e63b119..08645b29ff 100644
+--- a/third_party/skia/src/core/SkImageInfo.cpp
++++ b/third_party/skia/src/core/SkImageInfo.cpp
+@@ -21,6 +21,8 @@ int SkColorTypeBytesPerPixel(SkColorType ct) {
+         case kARGB_4444_SkColorType:          return 2;
+         case kRGBA_8888_SkColorType:          return 4;
+         case kBGRA_8888_SkColorType:          return 4;
++        case kARGB_8888_SkColorType:          return 4;
++        case kABGR_8888_SkColorType:          return 4;
+         case kRGB_888x_SkColorType:           return 4;
+         case kRGBA_1010102_SkColorType:       return 4;
+         case kRGB_101010x_SkColorType:        return 4;
+@@ -252,6 +254,8 @@ bool SkColorTypeValidateAlphaType(SkColorType colorType, SkAlphaType alphaType,
+         case kRGBA_8888_SkColorType:
+         case kSRGBA_8888_SkColorType:
+         case kBGRA_8888_SkColorType:
++        case kARGB_8888_SkColorType:
++        case kABGR_8888_SkColorType:
+         case kRGBA_1010102_SkColorType:
+         case kBGRA_1010102_SkColorType:
+         case kRGBA_10x6_SkColorType:
+diff --git a/third_party/skia/src/core/SkImageInfoPriv.h b/third_party/skia/src/core/SkImageInfoPriv.h
+index a67eda6707..90f31a9425 100644
+--- a/third_party/skia/src/core/SkImageInfoPriv.h
++++ b/third_party/skia/src/core/SkImageInfoPriv.h
+@@ -21,6 +21,8 @@ static inline uint32_t SkColorTypeChannelFlags(SkColorType ct) {
+         case kRGBA_8888_SkColorType:          return kRGBA_SkColorChannelFlags;
+         case kRGB_888x_SkColorType:           return kRGB_SkColorChannelFlags;
+         case kBGRA_8888_SkColorType:          return kRGBA_SkColorChannelFlags;
++        case kARGB_8888_SkColorType:          return kRGBA_SkColorChannelFlags;
++        case kABGR_8888_SkColorType:          return kRGBA_SkColorChannelFlags;
+         case kRGBA_1010102_SkColorType:       return kRGBA_SkColorChannelFlags;
+         case kRGB_101010x_SkColorType:        return kRGB_SkColorChannelFlags;
+         case kBGRA_1010102_SkColorType:       return kRGBA_SkColorChannelFlags;
+@@ -80,6 +82,8 @@ static int SkColorTypeShiftPerPixel(SkColorType ct) {
+         case kRGBA_8888_SkColorType:          return 2;
+         case kRGB_888x_SkColorType:           return 2;
+         case kBGRA_8888_SkColorType:          return 2;
++        case kARGB_8888_SkColorType:          return 2;
++        case kABGR_8888_SkColorType:          return 2;
+         case kRGBA_1010102_SkColorType:       return 2;
+         case kRGB_101010x_SkColorType:        return 2;
+         case kBGRA_1010102_SkColorType:       return 2;
+@@ -131,6 +135,8 @@ static inline bool SkColorTypeIsNormalized(SkColorType ct) {
+         case kRGBA_8888_SkColorType:
+         case kRGB_888x_SkColorType:
+         case kBGRA_8888_SkColorType:
++        case kARGB_8888_SkColorType:
++        case kABGR_8888_SkColorType:
+         case kRGBA_1010102_SkColorType:
+         case kRGB_101010x_SkColorType:
+         case kBGRA_1010102_SkColorType:
+diff --git a/third_party/skia/src/core/SkMipmapHQDownSampler.cpp b/third_party/skia/src/core/SkMipmapHQDownSampler.cpp
+index 6b17007717..7e600c448b 100644
+--- a/third_party/skia/src/core/SkMipmapHQDownSampler.cpp
++++ b/third_party/skia/src/core/SkMipmapHQDownSampler.cpp
+@@ -451,6 +451,8 @@ std::unique_ptr<SkMipmapDownSampler> SkMipmap::MakeDownSampler(const SkPixmap& r
+     switch (root.colorType()) {
+         case kRGBA_8888_SkColorType:
+         case kBGRA_8888_SkColorType:
++        case kARGB_8888_SkColorType:
++        case kABGR_8888_SkColorType:
+             proc_1_2 = downsample_1_2<ColorTypeFilter_8888>;
+             proc_1_3 = downsample_1_3<ColorTypeFilter_8888>;
+             proc_2_1 = downsample_2_1<ColorTypeFilter_8888>;
+diff --git a/third_party/skia/src/core/SkPixmap.cpp b/third_party/skia/src/core/SkPixmap.cpp
+index e3720e7cbf..ab57859c51 100644
+--- a/third_party/skia/src/core/SkPixmap.cpp
++++ b/third_party/skia/src/core/SkPixmap.cpp
+@@ -137,6 +137,10 @@ float SkPixmap::getAlphaf(int x, int y) const {
+         case kSRGBA_8888_SkColorType:
+             value = static_cast<const uint8_t*>(srcPtr)[3] * (1.0f/255);
+             break;
++        case kARGB_8888_SkColorType:
++        case kABGR_8888_SkColorType:
++            value = static_cast<const uint8_t*>(srcPtr)[0] * (1.0f/255);
++            break;
+         case kRGBA_1010102_SkColorType:
+         case kBGRA_1010102_SkColorType: {
+             uint32_t u32 = static_cast<const uint32_t*>(srcPtr)[0];
+@@ -278,6 +282,26 @@ SkColor SkPixmap::getColor(int x, int y) const {
+             a *= 255.0f;
+             return SkColorSetARGB(r, g, b, a);
+         }
++        case kARGB_8888_SkColorType: {
++            uint32_t value = *this->addr32(x, y);
++#if defined(SK_CPU_BENDIAN)
++	    value = (value << 8) | (value >> 24);
++#else
++	    value = (value >> 8) | (value << 24);
++#endif
++            SkPMColor c = SkSwizzle_RGBA_to_PMColor(value);
++            return toColor(c);
++        }
++        case kABGR_8888_SkColorType: {
++            uint32_t value = *this->addr32(x, y);
++#if defined(SK_CPU_BENDIAN)
++	    value = (value << 8) | (value >> 24);
++#else
++	    value = (value >> 8) | (value << 24);
++#endif
++            SkPMColor c = SkSwizzle_BGRA_to_PMColor(value);
++            return toColor(c);
++        }
+         case kRGB_101010x_SkColorType: {
+             uint32_t value = *this->addr32(x, y);
+             // Convert 10-bit rgb to 8-bit rgb
+@@ -647,6 +671,20 @@ bool SkPixmap::computeIsOpaque() const {
+             }
+             return true;
+         }
++        case kARGB_8888_SkColorType:
++        case kABGR_8888_SkColorType: {
++            SkPMColor c = (SkPMColor)~0;
++            for (int y = 0; y < height; ++y) {
++                const SkPMColor* row = this->addr32(0, y);
++                for (int x = 0; x < width; ++x) {
++                    c &= row[x];
++                }
++                if ((~c) & (0xFF << (24 - SK_RGBA_A32_SHIFT))) {
++                    return false;
++                }
++            }
++            return true;
++        }
+         case kRGBA_F16Norm_SkColorType:
+         case kRGBA_F16_SkColorType: {
+             const SkHalf* row = (const SkHalf*)this->addr();
+diff --git a/third_party/skia/src/core/SkRasterPipeline.cpp b/third_party/skia/src/core/SkRasterPipeline.cpp
+index 7a8df838e1..5dcff772bf 100644
+--- a/third_party/skia/src/core/SkRasterPipeline.cpp
++++ b/third_party/skia/src/core/SkRasterPipeline.cpp
+@@ -400,6 +400,15 @@ void SkRasterPipeline::appendLoad(SkColorType ct, const SkRasterPipelineContexts
+             this->append(Op::load_8888, ctx);
+             this->appendTransferFunction(*skcms_sRGB_TransferFunction());
+             break;
++
++        case kARGB_8888_SkColorType:
++	    this->append(Op::load_8888_argb, ctx);
++	    break;
++
++        case kABGR_8888_SkColorType:
++	    this->append(Op::load_8888_argb, ctx);
++	    this->append(Op::swap_rb);
++	    break;
+     }
+ }
+ 
+@@ -473,6 +482,15 @@ void SkRasterPipeline::appendLoadDst(SkColorType ct,
+             this->appendTransferFunction(*skcms_sRGB_TransferFunction());
+             this->append(Op::swap_src_dst);
+             break;
++
++        case kARGB_8888_SkColorType:
++            this->append(Op::load_8888_argb_dst, ctx);
++	    break;
++
++        case kABGR_8888_SkColorType:
++	    this->append(Op::load_8888_argb_dst, ctx);
++	    this->append(Op::swap_rb_dst);
++	    break;
+     }
+ }
+ 
+@@ -539,6 +557,15 @@ void SkRasterPipeline::appendStore(SkColorType ct, const SkRasterPipelineContext
+             this->appendTransferFunction(*skcms_sRGB_Inverse_TransferFunction());
+             this->append(Op::store_8888, ctx);
+             break;
++
++        case kARGB_8888_SkColorType:
++            this->append(Op::store_8888_argb, ctx);
++	    break;
++
++        case kABGR_8888_SkColorType:
++            this->append(Op::swap_rb);
++	    this->append(Op::store_8888_argb, ctx);
++	    break;
+     }
+ }
+ 
+diff --git a/third_party/skia/src/core/SkRasterPipelineBlitter.cpp b/third_party/skia/src/core/SkRasterPipelineBlitter.cpp
+index 8a78f40018..a4529c47b0 100644
+--- a/third_party/skia/src/core/SkRasterPipelineBlitter.cpp
++++ b/third_party/skia/src/core/SkRasterPipelineBlitter.cpp
+@@ -374,6 +374,8 @@ SkBlitter* SkRasterPipelineBlitter::Create(const SkPixmap& dst,
+             case kRGBA_8888_SkColorType:
+             case kBGRA_8888_SkColorType:
+             case kSRGBA_8888_SkColorType:
++            case kARGB_8888_SkColorType:
++            case kABGR_8888_SkColorType:
+             case kR8_unorm_SkColorType:
+                 blitter->fDitherRate = 1 / 255.0f;
+                 break;
+diff --git a/third_party/skia/src/core/SkRasterPipelineOpList.h b/third_party/skia/src/core/SkRasterPipelineOpList.h
+index b4c8dcc1ce..7400cb76f3 100644
+--- a/third_party/skia/src/core/SkRasterPipelineOpList.h
++++ b/third_party/skia/src/core/SkRasterPipelineOpList.h
+@@ -22,6 +22,8 @@
+     M(load_565)    M(load_565_dst)  M(store_565)   M(gather_565)      \
+     M(load_4444)   M(load_4444_dst) M(store_4444)  M(gather_4444)     \
+     M(load_8888)   M(load_8888_dst) M(store_8888)  M(gather_8888)     \
++    M(load_8888_argb)               M(store_8888_argb)                \
++    M(load_8888_argb_dst)           M(gather_8888_argb)	   	      \
+     M(load_rg88)   M(load_rg88_dst) M(store_rg88)  M(gather_rg88)     \
+     M(store_r8)                                                       \
+     M(alpha_to_gray) M(alpha_to_gray_dst)                             \
+diff --git a/third_party/skia/src/opts/SkRasterPipeline_opts.h b/third_party/skia/src/opts/SkRasterPipeline_opts.h
+index 3c695a9c06..c8fd42ef95 100644
+--- a/third_party/skia/src/opts/SkRasterPipeline_opts.h
++++ b/third_party/skia/src/opts/SkRasterPipeline_opts.h
+@@ -3172,15 +3172,28 @@ HIGHP_STAGE(load_8888, const SkRasterPipelineContexts::MemoryCtx* ctx) {
+     auto ptr = ptr_at_xy<const uint32_t>(ctx, dx,dy);
+     from_8888(load<U32>(ptr), &r,&g,&b,&a);
+ }
++HIGHP_STAGE(load_8888_argb, const SkRasterPipelineContexts::MemoryCtx* ctx) {
++    auto ptr = ptr_at_xy<const uint32_t>(ctx, dx,dy);
++    from_8888(load<U32>(ptr), &a,&r,&g,&b);
++}
+ HIGHP_STAGE(load_8888_dst, const SkRasterPipelineContexts::MemoryCtx* ctx) {
+     auto ptr = ptr_at_xy<const uint32_t>(ctx, dx,dy);
+     from_8888(load<U32>(ptr), &dr,&dg,&db,&da);
+ }
++HIGHP_STAGE(load_8888_argb_dst, const SkRasterPipelineContexts::MemoryCtx* ctx) {
++    auto ptr = ptr_at_xy<const uint32_t>(ctx, dx,dy);
++    from_8888(load<U32>(ptr), &da,&dr,&dg,&db);
++}
+ HIGHP_STAGE(gather_8888, const SkRasterPipelineContexts::GatherCtx* ctx) {
+     const uint32_t* ptr;
+     U32 ix = ix_and_ptr(&ptr, ctx, r,g);
+     from_8888(gather_unaligned(ptr, ix), &r,&g,&b,&a);
+ }
++HIGHP_STAGE(gather_8888_argb, const SkRasterPipelineContexts::GatherCtx* ctx) {
++    const uint32_t* ptr;
++    U32 ix = ix_and_ptr(&ptr, ctx, r,g);
++    from_8888(gather_unaligned(ptr, ix), &a,&r,&g,&b);
++}
+ HIGHP_STAGE(store_8888, const SkRasterPipelineContexts::MemoryCtx* ctx) {
+     auto ptr = ptr_at_xy<uint32_t>(ctx, dx,dy);
+ 
+@@ -3197,6 +3210,22 @@ HIGHP_STAGE(store_8888, const SkRasterPipelineContexts::MemoryCtx* ctx) {
+ #endif
+     store(ptr, px);
+ }
++HIGHP_STAGE(store_8888_argb, const SkRasterPipelineContexts::MemoryCtx* ctx) {
++    auto ptr = ptr_at_xy<uint32_t>(ctx, dx,dy);
++
++#ifdef SK_CPU_BENDIAN
++    U32 px = to_unorm(a, 255) << 24
++           | to_unorm(r, 255) << 16
++           | to_unorm(g, 255) <<  8
++           | to_unorm(b, 255);
++#else
++    U32 px = to_unorm(a, 255)
++           | to_unorm(r, 255) <<  8
++           | to_unorm(g, 255) << 16
++           | to_unorm(b, 255) << 24;
++#endif
++    store(ptr, px);
++}
+ 
+ HIGHP_STAGE(load_rg88, const SkRasterPipelineContexts::MemoryCtx* ctx) {
+     auto ptr = ptr_at_xy<const uint16_t>(ctx, dx, dy);
+diff --git a/third_party/skia/src/shaders/SkImageShader.cpp b/third_party/skia/src/shaders/SkImageShader.cpp
+index 10cc5921e8..ee9549a286 100644
+--- a/third_party/skia/src/shaders/SkImageShader.cpp
++++ b/third_party/skia/src/shaders/SkImageShader.cpp
+@@ -674,6 +674,15 @@ bool SkImageShader::appendStages(const SkStageRec& rec, const SkShaders::MatrixR
+                 p->appendTransferFunction(*skcms_sRGB_TransferFunction());
+                 break;
+ 
++            case kARGB_8888_SkColorType:
++	        p->append(SkRasterPipelineOp::gather_8888_argb, ctx);
++		break;
++
++            case kABGR_8888_SkColorType:
++	        p->append(SkRasterPipelineOp::gather_8888_argb, ctx);
++		p->append(SkRasterPipelineOp::swap_rb);
++		break;
++
+             case kUnknown_SkColorType: SkASSERT(false);
+         }
+         if (level->decalCtx) {
+diff --git a/third_party/skia/tools/HashAndEncode.cpp b/third_party/skia/tools/HashAndEncode.cpp
+index b719a3938a..3959a37818 100644
+--- a/third_party/skia/tools/HashAndEncode.cpp
++++ b/third_party/skia/tools/HashAndEncode.cpp
+@@ -63,6 +63,8 @@ HashAndEncode::HashAndEncode(const SkBitmap& bitmap) : fSize(bitmap.info().dimen
+         case kA16_float_SkColorType:          return;
+         case kRGBA_10x6_SkColorType:          return;
+         case kBGRA_10101010_XR_SkColorType:   return;
++        case kARGB_8888_SkColorType:          return;
++        case kABGR_8888_SkColorType:          return;
+     }
+ 
+     skcms_ICCProfile srcProfile = *skcms_sRGB_profile();
+-- 
+2.52.0
+
+
+From 112a4763c9f76b51a71b9ad86b9b4208d0d3391f Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 13 Mar 2021 12:51:25 +0100
+Subject: [PATCH 15/17] SkSwizzler_opts.h: Fix portable swizzle functions
+
+---
+ third_party/skia/src/opts/SkSwizzler_opts.inc | 138 ++++++++++++++++++
+ 1 file changed, 138 insertions(+)
+
+diff --git a/third_party/skia/src/opts/SkSwizzler_opts.inc b/third_party/skia/src/opts/SkSwizzler_opts.inc
+index 28710cc72b..afdb2c9455 100644
+--- a/third_party/skia/src/opts/SkSwizzler_opts.inc
++++ b/third_party/skia/src/opts/SkSwizzler_opts.inc
+@@ -126,6 +126,21 @@ SI float reciprocal_alpha(float a) {
+ #endif
+ 
+ static void RGBA_to_rgbA_portable(uint32_t* dst, const uint32_t* src, int count) {
++#ifdef SK_CPU_BENDIAN
++    for (int i = 0; i < count; i++) {
++        uint8_t r = (src[i] >> 24) & 0xFF,
++                g = (src[i] >> 16) & 0xFF,
++                b = (src[i] >>  8) & 0xFF,
++                a = (src[i] >>  0) & 0xFF;
++        b = (b*a+127)/255;
++        g = (g*a+127)/255;
++        r = (r*a+127)/255;
++        dst[i] = (uint32_t)r << 24
++               | (uint32_t)g << 16
++               | (uint32_t)b <<  8
++               | (uint32_t)a <<  0;
++    }
++#else
+     for (int i = 0; i < count; i++) {
+         uint8_t a = (src[i] >> 24) & 0xFF,
+                 b = (src[i] >> 16) & 0xFF,
+@@ -139,6 +154,7 @@ static void RGBA_to_rgbA_portable(uint32_t* dst, const uint32_t* src, int count)
+                | (uint32_t)g <<  8
+                | (uint32_t)r <<  0;
+     }
++#endif
+ }
+ 
+ // RP uses the following rounding routines in store_8888. There are three different
+@@ -236,6 +252,21 @@ static void rgbA_to_BGRA_portable(uint32_t* dst, const uint32_t* src, int count)
+ }
+ 
+ static void RGBA_to_bgrA_portable(uint32_t* dst, const uint32_t* src, int count) {
++#ifdef SK_CPU_BENDIAN
++    for (int i = 0; i < count; i++) {
++        uint8_t r = (src[i] >> 24) & 0xFF,
++                g = (src[i] >> 16) & 0xFF,
++                b = (src[i] >>  8) & 0xFF,
++                a = (src[i] >>  0) & 0xFF;
++        b = (b*a+127)/255;
++        g = (g*a+127)/255;
++        r = (r*a+127)/255;
++        dst[i] = (uint32_t)b << 24
++               | (uint32_t)g << 16
++               | (uint32_t)r <<  8
++               | (uint32_t)a <<  0;
++    }
++#else
+     for (int i = 0; i < count; i++) {
+         uint8_t a = (src[i] >> 24) & 0xFF,
+                 b = (src[i] >> 16) & 0xFF,
+@@ -249,9 +280,22 @@ static void RGBA_to_bgrA_portable(uint32_t* dst, const uint32_t* src, int count)
+                | (uint32_t)g <<  8
+                | (uint32_t)b <<  0;
+     }
++#endif
+ }
+ 
+ static void RGBA_to_BGRA_portable(uint32_t* dst, const uint32_t* src, int count) {
++#ifdef SK_CPU_BENDIAN
++    for (int i = 0; i < count; i++) {
++        uint8_t r = (src[i] >> 24) & 0xFF,
++                g = (src[i] >> 16) & 0xFF,
++                b = (src[i] >>  8) & 0xFF,
++                a = (src[i] >>  0) & 0xFF;
++        dst[i] = (uint32_t)b << 24
++               | (uint32_t)g << 16
++               | (uint32_t)r <<  8
++               | (uint32_t)a <<  0;
++    }
++#else
+     for (int i = 0; i < count; i++) {
+         uint8_t a = (src[i] >> 24) & 0xFF,
+                 b = (src[i] >> 16) & 0xFF,
+@@ -262,9 +306,21 @@ static void RGBA_to_BGRA_portable(uint32_t* dst, const uint32_t* src, int count)
+                | (uint32_t)g <<  8
+                | (uint32_t)b <<  0;
+     }
++#endif
+ }
+ 
+ static void grayA_to_RGBA_portable(uint32_t dst[], const uint8_t* src, int count) {
++#ifdef SK_CPU_BENDIAN
++    for (int i = 0; i < count; i++) {
++        uint8_t g = src[0],
++                a = src[1];
++        src += 2;
++        dst[i] = (uint32_t)g << 24
++               | (uint32_t)g << 16
++               | (uint32_t)g <<  8
++               | (uint32_t)a <<  0;
++    }
++#else
+     for (int i = 0; i < count; i++) {
+         uint8_t g = src[0],
+                 a = src[1];
+@@ -274,9 +330,22 @@ static void grayA_to_RGBA_portable(uint32_t dst[], const uint8_t* src, int count
+                | (uint32_t)g <<  8
+                | (uint32_t)g <<  0;
+     }
++#endif
+ }
+ 
+ static void grayA_to_rgbA_portable(uint32_t dst[], const uint8_t* src, int count) {
++#ifdef SK_CPU_BENDIAN
++    for (int i = 0; i < count; i++) {
++        uint8_t g = src[0],
++                a = src[1];
++        src += 2;
++        g = (g*a+127)/255;
++        dst[i] = (uint32_t)g << 24
++               | (uint32_t)g << 16
++               | (uint32_t)g <<  8
++               | (uint32_t)a <<  0;
++    }
++#else
+     for (int i = 0; i < count; i++) {
+         uint8_t g = src[0],
+                 a = src[1];
+@@ -287,9 +356,26 @@ static void grayA_to_rgbA_portable(uint32_t dst[], const uint8_t* src, int count
+                | (uint32_t)g <<  8
+                | (uint32_t)g <<  0;
+     }
++#endif
+ }
+ 
+ static void inverted_CMYK_to_RGB1_portable(uint32_t* dst, const uint32_t* src, int count) {
++#ifdef SK_CPU_BENDIAN
++    for (int i = 0; i < count; i++) {
++        uint8_t c = (src[i] >> 24) & 0xFF,
++                m = (src[i] >> 16) & 0xFF,
++                y = (src[i] >>  8) & 0xFF,
++                k = (src[i] >>  0) & 0xFF;
++        // See comments in SkSwizzler.cpp for details on the conversion formula.
++        uint8_t b = (y*k+127)/255,
++                g = (m*k+127)/255,
++                r = (c*k+127)/255;
++        dst[i] = (uint32_t)   r << 24
++               | (uint32_t)   g << 16
++               | (uint32_t)   b <<  8
++               | (uint32_t)0xFF <<  0;
++    }
++#else
+     for (int i = 0; i < count; i++) {
+         uint8_t k = (src[i] >> 24) & 0xFF,
+                 y = (src[i] >> 16) & 0xFF,
+@@ -304,9 +390,25 @@ static void inverted_CMYK_to_RGB1_portable(uint32_t* dst, const uint32_t* src, i
+                | (uint32_t)   g <<  8
+                | (uint32_t)   r <<  0;
+     }
++#endif
+ }
+ 
+ static void inverted_CMYK_to_BGR1_portable(uint32_t* dst, const uint32_t* src, int count) {
++#ifdef SK_CPU_BENDIAN
++    for (int i = 0; i < count; i++) {
++        uint8_t c = (src[i] >> 24) & 0xFF,
++                m = (src[i] >> 16) & 0xFF,
++                y = (src[i] >>  8) & 0xFF,
++                k = (src[i] >>  0) & 0xFF;
++        uint8_t b = (y*k+127)/255,
++                g = (m*k+127)/255,
++                r = (c*k+127)/255;
++        dst[i] = (uint32_t)   b << 24
++               | (uint32_t)   g << 16
++               | (uint32_t)   r <<  8
++               | (uint32_t)0xFF <<  0;
++    }
++#else
+     for (int i = 0; i < count; i++) {
+         uint8_t k = (src[i] >> 24) & 0xFF,
+                 y = (src[i] >> 16) & 0xFF,
+@@ -320,6 +422,7 @@ static void inverted_CMYK_to_BGR1_portable(uint32_t* dst, const uint32_t* src, i
+                | (uint32_t)   g <<  8
+                | (uint32_t)   b <<  0;
+     }
++#endif
+ }
+ 
+ #if defined(SK_ARM_HAS_NEON)
+@@ -1649,12 +1752,21 @@ void inverted_CMYK_to_BGR1(uint32_t dst[], const uint32_t* src, int count) {
+ 
+ // Basically as above, but we found no benefit from AVX-512 for gray_to_RGB1.
+ static void gray_to_RGB1_portable(uint32_t dst[], const uint8_t* src, int count) {
++#ifdef SK_CPU_BENDIAN
++    for (int i = 0; i < count; i++) {
++        dst[i] = (uint32_t)src[i] << 24
++               | (uint32_t)src[i] << 16
++               | (uint32_t)src[i] <<  8
++               | (uint32_t)0xFF   <<  0;
++    }
++#else
+     for (int i = 0; i < count; i++) {
+         dst[i] = (uint32_t)0xFF   << 24
+                | (uint32_t)src[i] << 16
+                | (uint32_t)src[i] <<  8
+                | (uint32_t)src[i] <<  0;
+     }
++#endif
+ }
+ #if defined(SK_ARM_HAS_NEON)
+     void gray_to_RGB1(uint32_t dst[], const uint8_t* src, int count) {
+@@ -1833,6 +1945,18 @@ static void gray_to_RGB1_portable(uint32_t dst[], const uint8_t* src, int count)
+ 
+ // Again as above, this time not even finding benefit from AVX2 for RGB_to_{RGB,BGR}1.
+ static void RGB_to_RGB1_portable(uint32_t dst[], const uint8_t* src, int count) {
++#ifdef SK_CPU_BENDIAN
++    for (int i = 0; i < count; i++) {
++        uint8_t r = src[0],
++                g = src[1],
++                b = src[2];
++        src += 3;
++        dst[i] = (uint32_t)r    << 24
++               | (uint32_t)g    << 16
++               | (uint32_t)b    <<  8
++               | (uint32_t)0xFF <<  0;
++    }
++#else
+     for (int i = 0; i < count; i++) {
+         uint8_t r = src[0],
+                 g = src[1],
+@@ -1843,8 +1967,21 @@ static void RGB_to_RGB1_portable(uint32_t dst[], const uint8_t* src, int count)
+                | (uint32_t)g    <<  8
+                | (uint32_t)r    <<  0;
+     }
++#endif
+ }
+ static void RGB_to_BGR1_portable(uint32_t dst[], const uint8_t* src, int count) {
++#ifdef SK_CPU_BENDIAN
++    for (int i = 0; i < count; i++) {
++        uint8_t r = src[0],
++                g = src[1],
++                b = src[2];
++        src += 3;
++        dst[i] = (uint32_t)b    << 24
++               | (uint32_t)g    << 16
++               | (uint32_t)r    <<  8
++               | (uint32_t)0xFF <<  0;
++    }
++#else
+     for (int i = 0; i < count; i++) {
+         uint8_t r = src[0],
+                 g = src[1],
+@@ -1855,6 +1992,7 @@ static void RGB_to_BGR1_portable(uint32_t dst[], const uint8_t* src, int count)
+                | (uint32_t)g    <<  8
+                | (uint32_t)b    <<  0;
+     }
++#endif
+ }
+ #if defined(SK_ARM_HAS_NEON)
+     static void insert_alpha_should_swaprb(bool kSwapRB,
+-- 
+2.52.0
+
+
+From 41a8dfad94bbc738742d4acdfa6c4a1ed15638d5 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Fri, 7 Jul 2023 20:50:36 +0200
+Subject: [PATCH 16/17] SkFlattenable: Fix string check on big endian
+
+---
+ third_party/skia/src/core/SkReadBuffer.cpp | 14 ++++++++++----
+ third_party/skia/src/core/SkReadBuffer.h   |  2 +-
+ 2 files changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/third_party/skia/src/core/SkReadBuffer.cpp b/third_party/skia/src/core/SkReadBuffer.cpp
+index f22c26bb58..ad30268d2a 100644
+--- a/third_party/skia/src/core/SkReadBuffer.cpp
++++ b/third_party/skia/src/core/SkReadBuffer.cpp
+@@ -127,12 +127,12 @@ int32_t SkReadBuffer::read32() {
+     return this->readInt();
+ }
+ 
+-uint8_t SkReadBuffer::peekByte() {
+-    if (this->available() <= 0) {
++uint8_t SkReadBuffer::peekByte(size_t offs) {
++    if (this->available() <= offs) {
+         fError = true;
+         return 0;
+     }
+-    return *((const uint8_t*)fCurr);
++    return ((const uint8_t*)fCurr)[offs];
+ }
+ 
+ bool SkReadBuffer::readPad32(void* buffer, size_t bytes) {
+@@ -487,7 +487,13 @@ SkFlattenable* SkReadBuffer::readRawFlattenable() {
+         }
+         factory = fFactoryArray[index];
+     } else {
+-        if (this->peekByte() != 0) {
++        if (this->peekByte(
++#ifdef SK_CPU_BENDIAN
++			   3
++#else
++			   0
++#endif
++			   ) != 0) {
+             // If the first byte is non-zero, the flattenable is specified by a string.
+             size_t ignored_length;
+             if (const char* name = this->readString(&ignored_length)) {
+diff --git a/third_party/skia/src/core/SkReadBuffer.h b/third_party/skia/src/core/SkReadBuffer.h
+index 6578908dcc..ee261354d4 100644
+--- a/third_party/skia/src/core/SkReadBuffer.h
++++ b/third_party/skia/src/core/SkReadBuffer.h
+@@ -107,7 +107,7 @@ public:
+     }
+ 
+     // peek
+-    uint8_t peekByte();
++    uint8_t peekByte(size_t offs = 0);
+ 
+     void readString(SkString* string);
+ 
+-- 
+2.52.0
+
+
+From 1a1b70fc0c360f39405180bb90d7b5f93608a66e Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 22 Mar 2026 20:45:46 +0100
+Subject: [PATCH 17/17] SkSwizzler_opts_ssse3: Disable on big endian
+
+---
+ third_party/skia/src/core/SkSwizzler_opts_ssse3.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/skia/src/core/SkSwizzler_opts_ssse3.cpp b/third_party/skia/src/core/SkSwizzler_opts_ssse3.cpp
+index b22fb5fc83..f04b0daac8 100644
+--- a/third_party/skia/src/core/SkSwizzler_opts_ssse3.cpp
++++ b/third_party/skia/src/core/SkSwizzler_opts_ssse3.cpp
+@@ -12,7 +12,7 @@
+ 
+ #if (defined(SK_CPU_X86) || defined(SK_CPU_PPC64)) && \
+     !defined(SK_ENABLE_OPTIMIZE_SIZE) && \
+-    SK_CPU_SSE_LEVEL < SK_CPU_SSE_LEVEL_SSSE3
++    SK_CPU_SSE_LEVEL < SK_CPU_SSE_LEVEL_SSSE3 && !defined(__BIG_ENDIAN__)
+ 
+ // The order of these includes is important:
+ // 1) Select the target CPU architecture by defining SK_OPTS_TARGET and including SkOpts_SetTarget
+-- 
+2.52.0
+

@@ -1,0 +1,207 @@
+From d80f066f5b3068518d574654f3dfbc49070d3136 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 15 Jul 2025 13:01:50 +0200
+Subject: [PATCH 1/5] Disable unit tests
+
+---
+ v8/test/BUILD.gn | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/v8/test/BUILD.gn b/v8/test/BUILD.gn
+index eda127d882..3efb74ffbe 100644
+--- a/v8/test/BUILD.gn
++++ b/v8/test/BUILD.gn
+@@ -47,7 +47,7 @@ group("gn_all") {
+       "benchmarks/cpp:gn_all",
+       "cctest:cctest",
+       "unittests:generate-bytecode-expectations",
+-      "unittests:v8_unittests",
++      #"unittests:v8_unittests",
+     ]
+   }
+ }
+@@ -105,7 +105,7 @@ group("v8_bot_default") {
+     "message:v8_message",
+     "mjsunit:v8_mjsunit",
+     "mkgrokdump:mkgrokdump",
+-    "unittests:v8_unittests",
++    #"unittests:v8_unittests",
+     "webkit:v8_webkit",
+   ]
+ 
+@@ -135,7 +135,7 @@ group("v8_default") {
+     "message:v8_message",
+     "mjsunit:v8_mjsunit",
+     "mkgrokdump:mkgrokdump",
+-    "unittests:v8_unittests",
++    #"unittests:v8_unittests",
+   ]
+ 
+   if (v8_enable_webassembly) {
+-- 
+2.52.0
+
+
+From d037dff961e22a0cab4c01298339e0b0e6b1f609 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:51:28 +0100
+Subject: [PATCH 2/5] Restrict range of random addresses on big endian PPC64
+
+---
+ v8/src/base/platform/platform-posix.cc | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/v8/src/base/platform/platform-posix.cc b/v8/src/base/platform/platform-posix.cc
+index 8b269b4b5d..b37c6bc9a7 100644
+--- a/v8/src/base/platform/platform-posix.cc
++++ b/v8/src/base/platform/platform-posix.cc
+@@ -404,6 +404,9 @@ void* OS::GetRandomMmapAddr() {
+   raw_addr &= uint64_t{0x3FFFF000};
+   // Use extra address space to isolate the mmap regions.
+   raw_addr += uint64_t{0x400000000000};
++#elif V8_TARGET_BIG_ENDIAN
++  // Big-endian Linux: 42 bits of virtual addressing.
++  raw_addr &= uint64_t{0x03FFFFFF0000};
+ #else
+   // Little-endian Linux: 46 bits of virtual addressing.
+   raw_addr &= uint64_t{0x3FFFFFFF0000};
+-- 
+2.52.0
+
+
+From 465f3403612d3674f211c7f216b5e56b146f934c Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Tue, 4 Jul 2023 18:23:41 +0200
+Subject: [PATCH 3/5] Use AIX calling conventions also for Linux with ELFv1
+
+---
+ .../heap/base/asm/ppc/push_registers_asm.cc   | 21 +++++++++++++++----
+ 1 file changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/v8/src/heap/base/asm/ppc/push_registers_asm.cc b/v8/src/heap/base/asm/ppc/push_registers_asm.cc
+index f879980556..e65de0c413 100644
+--- a/v8/src/heap/base/asm/ppc/push_registers_asm.cc
++++ b/v8/src/heap/base/asm/ppc/push_registers_asm.cc
+@@ -16,9 +16,22 @@
+ 
+ // AIX Runtime process stack:
+ // https://www.ibm.com/support/knowledgecenter/ssw_aix_71/assembler/idalangref_runtime_process.html
++
++#include "src/codegen/ppc/constants-ppc.h"
++
+ asm(
++#if ABI_USES_FUNCTION_DESCRIPTORS
+ #if defined(_AIX)
+     ".csect .text[PR]                                   \n"
++#else
++    /* Linux linker requires the function descriptor to be provided */
++    ".section	\".opd\",\"aw\"                         \n"
++    ".align 3                                           \n"
++    ".globl PushAllRegistersAndIterateStack, hidden     \n"
++    "PushAllRegistersAndIterateStack:                   \n"
++    ".quad .PushAllRegistersAndIterateStack,.TOC.@tocbase,0 \n"
++    ".text                                              \n"
++#endif
+     ".align 2                                           \n"
+     ".globl .PushAllRegistersAndIterateStack, hidden    \n"
+     ".PushAllRegistersAndIterateStack:                  \n"
+@@ -36,7 +49,7 @@ asm(
+     // At anytime, SP (r1) needs to be multiple of 16 (i.e. 16-aligned).
+     "  mflr 0                                          \n"
+     "  std 0, 16(1)                                    \n"
+-#if defined(_AIX)
++#if ABI_USES_FUNCTION_DESCRIPTORS
+     "  std 2, 40(1)                                    \n"
+ #else
+     "  std 2, 24(1)                                    \n"
+@@ -64,7 +77,7 @@ asm(
+     // Pass 2nd parameter (r4) unchanged (StackVisitor*).
+     // Save 3rd parameter (r5; IterateStackCallback).
+     "  mr 6, 5                                         \n"
+-#if defined(_AIX)
++#if ABI_USES_FUNCTION_DESCRIPTORS
+     // Set up TOC for callee.
+     "  ld 2,8(5)                                       \n"
+     // AIX uses function descriptors, which means that
+@@ -75,7 +88,7 @@ asm(
+ #endif
+     // Pass 3rd parameter as sp (stack pointer).
+     "  mr 5, 1                                         \n"
+-#if !defined(_AIX)
++#if !ABI_USES_FUNCTION_DESCRIPTORS
+     // Set up r12 to be equal to the callee address (in order for TOC
+     // relocation). Only needed on LE Linux.
+     "  mr 12, 6                                        \n"
+@@ -88,7 +101,7 @@ asm(
+     // Restore lr.
+     "  ld 0, 16(1)                                     \n"
+     "  mtlr  0                                         \n"
+-#if defined(_AIX)
++#if ABI_USES_FUNCTION_DESCRIPTORS
+     // Restore TOC pointer.
+     "  ld 2, 40(1)                                     \n"
+ #else
+-- 
+2.52.0
+
+
+From adfb0beebb25a60d5ba3ecb33424bd966cbff058 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Thu, 17 Jul 2025 22:32:38 +0200
+Subject: [PATCH 4/5] Define V8_TARGET_BIG_ENDIAN for linux/ppc64
+
+---
+ v8/include/v8config.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/v8/include/v8config.h b/v8/include/v8config.h
+index ec33ee7d10..a65360f8ca 100644
+--- a/v8/include/v8config.h
++++ b/v8/include/v8config.h
+@@ -1027,7 +1027,7 @@ arm64 host
+ #define V8_TARGET_LITTLE_ENDIAN 1
+ #endif
+ #elif V8_TARGET_ARCH_PPC64
+-#if V8_OS_AIX
++#if defined(__BIG_ENDIAN__) || defined(V8_OS_AIX)
+ #define V8_TARGET_BIG_ENDIAN 1
+ #else
+ #define V8_TARGET_LITTLE_ENDIAN 1
+-- 
+2.52.0
+
+
+From c4344967def125473c9a1038d5769cf89f8f1e15 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sat, 6 Jun 2026 20:30:13 +0200
+Subject: [PATCH 5/5] Disable pointer compression on ppc64
+
+Pointer compression implies 31BIT_SMIS_ON_64BIT_ARCH, which tries
+to use 32-bit accesses to access SMIs stored in 64-bit "registers"
+on the stack.  Unfortunately, it uses the same base address for that
+register when it does the 32-bit accesses as when it does 64-bit
+accesses, which means it manipulates the upper 32 bits instead of the
+lower 32 bits on big endian.
+
+By disabling pointer compression, only 64 bit accesses are made to
+these "registers", removing the problem.
+---
+ v8/gni/v8.gni | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/v8/gni/v8.gni b/v8/gni/v8.gni
+index 947cd11261..4cb3301eec 100644
+--- a/v8/gni/v8.gni
++++ b/v8/gni/v8.gni
+@@ -316,7 +316,7 @@ assert(
+ if (v8_enable_pointer_compression == "") {
+   v8_enable_pointer_compression =
+       v8_current_cpu == "arm64" || v8_current_cpu == "x64" ||
+-      v8_current_cpu == "loong64" || v8_current_cpu == "ppc64"
++      v8_current_cpu == "loong64"
+ }
+ 
+ # The Wasm interpreter is currently supported only on arm64 and x64, on
+-- 
+2.52.0
+
