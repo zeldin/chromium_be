@@ -1,0 +1,48 @@
+From 1ce312475fa26fecdb1448a4e047f488df4f1409 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Sun, 14 Feb 2021 19:36:38 +0100
+Subject: [PATCH] Add sources needed on ppc64 to the build
+
+---
+ third_party/swiftshader/third_party/llvm-10.0/BUILD.gn | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn b/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
+index f99abba377..4acb5628df 100644
+--- a/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
++++ b/third_party/swiftshader/third_party/llvm-10.0/BUILD.gn
+@@ -136,7 +136,6 @@ swiftshader_llvm_source_set("swiftshader_llvm") {
+   if (is_ubsan_vptr) {
+     sources = [
+       "llvm/lib/MC/MCWasmObjectTargetWriter.cpp",
+-      "llvm/lib/MC/MCXCOFFObjectTargetWriter.cpp",
+       "llvm/lib/Target/ARM/MCTargetDesc/ARMTargetStreamer.cpp",
+       "llvm/lib/Target/TargetIntrinsicInfo.cpp",
+     ]
+@@ -586,6 +585,7 @@ swiftshader_llvm_source_set("swiftshader_llvm_most") {
+     "llvm/lib/MC/MCAsmInfoCOFF.cpp",
+     "llvm/lib/MC/MCAsmInfoDarwin.cpp",
+     "llvm/lib/MC/MCAsmInfoELF.cpp",
++    "llvm/lib/MC/MCAsmInfoXCOFF.cpp",
+     "llvm/lib/MC/MCAsmMacro.cpp",
+     "llvm/lib/MC/MCAsmStreamer.cpp",
+     "llvm/lib/MC/MCAssembler.cpp",
+@@ -641,6 +641,7 @@ swiftshader_llvm_source_set("swiftshader_llvm_most") {
+     "llvm/lib/MC/MCWinCOFFStreamer.cpp",
+     "llvm/lib/MC/MCWinEH.cpp",
+     "llvm/lib/MC/MCXCOFFStreamer.cpp",
++    "llvm/lib/MC/MCXCOFFObjectTargetWriter.cpp",
+     "llvm/lib/MC/MachObjectWriter.cpp",
+     "llvm/lib/MC/StringTableBuilder.cpp",
+     "llvm/lib/MC/SubtargetFeature.cpp",
+@@ -870,6 +871,7 @@ swiftshader_llvm_source_set("swiftshader_llvm_support") {
+     "llvm/lib/Support/ARMAttributeParser.cpp",
+     "llvm/lib/Support/ARMBuildAttrs.cpp",
+     "llvm/lib/Support/ARMTargetParser.cpp",
++    "llvm/lib/Support/Atomic.cpp",
+     "llvm/lib/Support/BinaryStreamError.cpp",
+     "llvm/lib/Support/BinaryStreamReader.cpp",
+     "llvm/lib/Support/BinaryStreamRef.cpp",
+-- 
+2.53.0
+

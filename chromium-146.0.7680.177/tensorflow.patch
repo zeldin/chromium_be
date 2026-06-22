@@ -1,0 +1,53 @@
+From b5dd77185dd9273d7d86f7718f6976ef466f91be Mon Sep 17 00:00:00 2001
+From: saisindhuri91 <saisindhuri91@gmail.com>
+Date: Wed, 26 Feb 2025 12:48:32 +0530
+Subject: [PATCH 1/2] Update flexbuffers_util.h
+
+Signed-off-by: saisindhuri91 <Sai.Sindhuri.Avulamanda@ibm.com>
+---
+ .../src/tensorflow/lite/delegates/xnnpack/flexbuffers_util.h    | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/tflite/src/tensorflow/lite/delegates/xnnpack/flexbuffers_util.h b/third_party/tflite/src/tensorflow/lite/delegates/xnnpack/flexbuffers_util.h
+index 6f303c8a92..da017a5fba 100644
+--- a/third_party/tflite/src/tensorflow/lite/delegates/xnnpack/flexbuffers_util.h
++++ b/third_party/tflite/src/tensorflow/lite/delegates/xnnpack/flexbuffers_util.h
+@@ -48,7 +48,7 @@ tflite::xnnpack::FloatPointer inline flexbuffers::Reference::As<
+ #if !FLATBUFFERS_LITTLEENDIAN
+   // Flexbuffers are always stored in little endian order. Returning a pointer
+   // to the float data on a big endian architecture is meaningless.
+-  return nullptr;
++  return {nullptr};
+ #else
+   return {IsFloat() ? reinterpret_cast<const float*>(data_) : nullptr};
+ #endif
+-- 
+2.53.0
+
+
+From 4fd169855db3580f7d442aaf1408f34d6c96dd95 Mon Sep 17 00:00:00 2001
+From: saisindhuri91 <saisindhuri91@gmail.com>
+Date: Wed, 26 Feb 2025 12:48:32 +0530
+Subject: [PATCH 2/2] Update flexbuffers_util.h
+
+Signed-off-by: saisindhuri91 <Sai.Sindhuri.Avulamanda@ibm.com>
+---
+ .../litert/src/tflite/delegates/xnnpack/flexbuffers_util.h      | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/litert/src/tflite/delegates/xnnpack/flexbuffers_util.h b/third_party/litert/src/tflite/delegates/xnnpack/flexbuffers_util.h
+index 6f303c8a92..da017a5fba 100644
+--- a/third_party/litert/src/tflite/delegates/xnnpack/flexbuffers_util.h
++++ b/third_party/litert/src/tflite/delegates/xnnpack/flexbuffers_util.h
+@@ -48,7 +48,7 @@ tflite::xnnpack::FloatPointer inline flexbuffers::Reference::As<
+ #if !FLATBUFFERS_LITTLEENDIAN
+   // Flexbuffers are always stored in little endian order. Returning a pointer
+   // to the float data on a big endian architecture is meaningless.
+-  return nullptr;
++  return {nullptr};
+ #else
+   return {IsFloat() ? reinterpret_cast<const float*>(data_) : nullptr};
+ #endif
+-- 
+2.53.0
+

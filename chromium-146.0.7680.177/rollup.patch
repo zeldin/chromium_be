@@ -1,0 +1,131 @@
+From 4b2454f333cd38643c45fab588cec64ed7ba4cde Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Thu, 17 Jul 2025 10:12:08 +0200
+Subject: [PATCH] Make sure astBuffer is parsed as LE since it comes from wasm
+
+---
+ .../@rollup/wasm-node/dist/es/shared/parseAst.js      | 11 ++++++++++-
+ .../@rollup/wasm-node/dist/shared/parseAst.js         | 11 ++++++++++-
+ .../node_modules/rollup/dist/es/shared/parseAst.js    | 11 ++++++++++-
+ .../src/node_modules/rollup/dist/shared/parseAst.js   | 11 ++++++++++-
+ .../@rollup/wasm-node/dist/shared/parseAst.js         | 11 ++++++++++-
+ 5 files changed, 50 insertions(+), 5 deletions(-)
+
+diff --git a/third_party/devtools-frontend/src/node_modules/@rollup/wasm-node/dist/es/shared/parseAst.js b/third_party/devtools-frontend/src/node_modules/@rollup/wasm-node/dist/es/shared/parseAst.js
+index 62cc081431..0e158fc9d5 100644
+--- a/third_party/devtools-frontend/src/node_modules/@rollup/wasm-node/dist/es/shared/parseAst.js
++++ b/third_party/devtools-frontend/src/node_modules/@rollup/wasm-node/dist/es/shared/parseAst.js
+@@ -2069,8 +2069,17 @@ function convertNodeList(position, buffer) {
+     return list;
+ }
+ 
++function arrayify(astBuffer) {
++    let dv = new DataView(astBuffer);
++    let n = dv.byteLength >> 2;
++    let u32a = new Uint32Array(n);
++    for (let i = 0; i < n; i++)
++	u32a[i] = dv.getUint32(i<<2, true);
++    return u32a;
++}
++
+ function getAstBuffer(astBuffer) {
+-    const array = new Uint32Array(astBuffer.buffer);
++    const array = arrayify(astBuffer.buffer);
+     let convertString;
+     if (typeof Buffer !== 'undefined' && astBuffer instanceof Buffer) {
+         convertString = (position) => {
+diff --git a/third_party/devtools-frontend/src/node_modules/@rollup/wasm-node/dist/shared/parseAst.js b/third_party/devtools-frontend/src/node_modules/@rollup/wasm-node/dist/shared/parseAst.js
+index 48e6f77024..4b3ed8bbcd 100644
+--- a/third_party/devtools-frontend/src/node_modules/@rollup/wasm-node/dist/shared/parseAst.js
++++ b/third_party/devtools-frontend/src/node_modules/@rollup/wasm-node/dist/shared/parseAst.js
+@@ -2132,8 +2132,17 @@ function convertNodeList(position, buffer) {
+     return list;
+ }
+ 
++function arrayify(astBuffer) {
++    let dv = new DataView(astBuffer);
++    let n = dv.byteLength >> 2;
++    let u32a = new Uint32Array(n);
++    for (let i = 0; i < n; i++)
++	u32a[i] = dv.getUint32(i<<2, true);
++    return u32a;
++}
++
+ function getAstBuffer(astBuffer) {
+-    const array = new Uint32Array(astBuffer.buffer);
++    const array = arrayify(astBuffer.buffer);
+     let convertString;
+     if (typeof Buffer !== 'undefined' && astBuffer instanceof Buffer) {
+         convertString = (position) => {
+diff --git a/third_party/devtools-frontend/src/node_modules/rollup/dist/es/shared/parseAst.js b/third_party/devtools-frontend/src/node_modules/rollup/dist/es/shared/parseAst.js
+index 6e791e68d4..f947c16c14 100644
+--- a/third_party/devtools-frontend/src/node_modules/rollup/dist/es/shared/parseAst.js
++++ b/third_party/devtools-frontend/src/node_modules/rollup/dist/es/shared/parseAst.js
+@@ -1899,8 +1899,17 @@ function convertNodeList(position, buffer) {
+     return list;
+ }
+ 
++function arrayify(astBuffer) {
++    let dv = new DataView(astBuffer);
++    let n = dv.byteLength >> 2;
++    let u32a = new Uint32Array(n);
++    for (let i = 0; i < n; i++)
++	u32a[i] = dv.getUint32(i<<2, true);
++    return u32a;
++}
++
+ function getAstBuffer(astBuffer) {
+-    const array = new Uint32Array(astBuffer.buffer);
++    const array = arrayify(astBuffer.buffer);
+     let convertString;
+     if (typeof Buffer !== 'undefined' && astBuffer instanceof Buffer) {
+         convertString = (position) => {
+diff --git a/third_party/devtools-frontend/src/node_modules/rollup/dist/shared/parseAst.js b/third_party/devtools-frontend/src/node_modules/rollup/dist/shared/parseAst.js
+index 22a6187f80..1cee0c6b2c 100644
+--- a/third_party/devtools-frontend/src/node_modules/rollup/dist/shared/parseAst.js
++++ b/third_party/devtools-frontend/src/node_modules/rollup/dist/shared/parseAst.js
+@@ -1962,8 +1962,17 @@ function convertNodeList(position, buffer) {
+     return list;
+ }
+ 
++function arrayify(astBuffer) {
++    let dv = new DataView(astBuffer);
++    let n = dv.byteLength >> 2;
++    let u32a = new Uint32Array(n);
++    for (let i = 0; i < n; i++)
++	u32a[i] = dv.getUint32(i<<2, true);
++    return u32a;
++}
++
+ function getAstBuffer(astBuffer) {
+-    const array = new Uint32Array(astBuffer.buffer);
++    const array = arrayify(astBuffer.buffer);
+     let convertString;
+     if (typeof Buffer !== 'undefined' && astBuffer instanceof Buffer) {
+         convertString = (position) => {
+diff --git a/third_party/node/node_modules/@rollup/wasm-node/dist/shared/parseAst.js b/third_party/node/node_modules/@rollup/wasm-node/dist/shared/parseAst.js
+index c8bd293992..d193cdf37d 100644
+--- a/third_party/node/node_modules/@rollup/wasm-node/dist/shared/parseAst.js
++++ b/third_party/node/node_modules/@rollup/wasm-node/dist/shared/parseAst.js
+@@ -1948,8 +1948,17 @@ function convertNodeList(position, buffer) {
+     return list;
+ }
+ 
++function arrayify(astBuffer) {
++    let dv = new DataView(astBuffer);
++    let n = dv.byteLength >> 2;
++    let u32a = new Uint32Array(n);
++    for (let i = 0; i < n; i++)
++	u32a[i] = dv.getUint32(i<<2, true);
++    return u32a;
++}
++
+ function getAstBuffer(astBuffer) {
+-    const array = new Uint32Array(astBuffer.buffer);
++    const array = arrayify(astBuffer.buffer);
+     let convertString;
+     if (typeof Buffer !== 'undefined' && astBuffer instanceof Buffer) {
+         convertString = (position) => {
+-- 
+2.53.0
+
