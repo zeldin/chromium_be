@@ -1,7 +1,7 @@
 From 8faf4eab00c349a7ab671f5aefc01e371b4bba76 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 15 Jul 2025 13:01:50 +0200
-Subject: [PATCH 1/6] Disable unit tests
+Subject: [PATCH 1/7] Disable unit tests
 
 ---
  v8/test/BUILD.gn | 6 +++---
@@ -45,7 +45,7 @@ index eda127d882..3efb74ffbe 100644
 From 2bd03df36f564106e9182cc85b5c173e9cfd32d3 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 6 Jan 2021 13:51:28 +0100
-Subject: [PATCH 2/6] Restrict range of random addresses on big endian PPC64
+Subject: [PATCH 2/7] Restrict range of random addresses on big endian PPC64
 
 ---
  v8/src/base/platform/platform-posix.cc | 3 +++
@@ -72,7 +72,7 @@ index 4c7d878b11..d335adce24 100644
 From 25b57f1d9647aa66349bec507674563f4b084cb0 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 4 Jul 2023 18:23:41 +0200
-Subject: [PATCH 3/6] Use AIX calling conventions also for Linux with ELFv1
+Subject: [PATCH 3/7] Use AIX calling conventions also for Linux with ELFv1
 
 ---
  .../heap/base/asm/ppc/push_registers_asm.cc   | 21 +++++++++++++++----
@@ -148,7 +148,7 @@ index f879980556..e65de0c413 100644
 From 6d0768eb6f65626abff842eaa4820430a940302f Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Thu, 17 Jul 2025 22:32:38 +0200
-Subject: [PATCH 4/6] Define V8_TARGET_BIG_ENDIAN for linux/ppc64
+Subject: [PATCH 4/7] Define V8_TARGET_BIG_ENDIAN for linux/ppc64
 
 ---
  v8/include/v8config.h | 2 +-
@@ -174,7 +174,7 @@ index 1624183738..ffd7cec937 100644
 From 2592b8e2ead8ff959b1a67f6d52a586139351584 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 6 Jun 2026 20:30:13 +0200
-Subject: [PATCH 5/6] Disable pointer compression on ppc64
+Subject: [PATCH 5/7] Disable pointer compression on ppc64
 
 Pointer compression implies 31BIT_SMIS_ON_64BIT_ARCH, which tries
 to use 32-bit accesses to access SMIs stored in 64-bit "registers"
@@ -209,7 +209,7 @@ index 78ae95633f..e29a7c5de3 100644
 From 71f5b7f66bb4b9e1adec6c36b0a643aabe090647 Mon Sep 17 00:00:00 2001
 From: Milad Fa <mfarazma@ibm.com>
 Date: Mon, 23 Feb 2026 21:21:29 +0000
-Subject: [PATCH 6/6] Mark MemCopyAndSwitchEndianness src input as `const`
+Subject: [PATCH 6/7] Mark MemCopyAndSwitchEndianness src input as `const`
 
 Needed after this CL: http://crrev.com/c/7600437
 Currently getting the following error:
@@ -277,6 +277,33 @@ index 787c1f1109..2b4ed6fcc7 100644
                                         size_t num_elements,
                                         size_t element_size) {
    v8::base::MemCopyAndSwitchEndianness(dst, src, num_elements, element_size);
+-- 
+2.53.0
+
+
+From 8b55c89ec1556c24a22874184efa4e6c6ef159c1 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Mon, 13 Jul 2026 16:26:59 +0200
+Subject: [PATCH 7/7] Disable maglev on ppc64
+
+---
+ v8/BUILD.gn | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/v8/BUILD.gn b/v8/BUILD.gn
+index 78fc9ffb90..010d68d966 100644
+--- a/v8/BUILD.gn
++++ b/v8/BUILD.gn
+@@ -622,8 +622,7 @@ if (v8_enable_maglev == "") {
+       v8_enable_turbofan &&
+       (v8_current_cpu == "arm" || v8_current_cpu == "x64" ||
+        v8_current_cpu == "arm64" || v8_current_cpu == "s390x" ||
+-       v8_current_cpu == "ppc64" || v8_current_cpu == "riscv64" ||
+-       v8_current_cpu == "loong64")
++       v8_current_cpu == "riscv64" || v8_current_cpu == "loong64")
+ }
+ assert(v8_enable_turbofan || !v8_enable_maglev,
+        "Maglev is not available when Turbofan is disabled.")
 -- 
 2.53.0
 
