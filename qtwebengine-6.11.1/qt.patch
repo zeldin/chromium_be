@@ -1,0 +1,66 @@
+From cc1d8eb151be4f26a4afabd4621ff5726576eb8f Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 16 Jul 2025 14:49:17 +0200
+Subject: [PATCH 1/2] cmake: Recognize ppc64
+
+---
+ cmake/QtToolchainHelpers.cmake | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/cmake/QtToolchainHelpers.cmake b/cmake/QtToolchainHelpers.cmake
+index aca1fab4af..b9184691ac 100644
+--- a/cmake/QtToolchainHelpers.cmake
++++ b/cmake/QtToolchainHelpers.cmake
+@@ -55,6 +55,8 @@ function(get_gn_arch result arch)
+         set(${result} "mips64el" PARENT_SCOPE)
+     elseif(arch STREQUAL "riscv64")
+         set(${result} "riscv64" PARENT_SCOPE)
++    elseif(arch STREQUAL "power64")
++        set(${result} "ppc64" PARENT_SCOPE)
+     else()
+         message(FATAL_ERROR "Unknown architecture: ${arch}")
+     endif()
+-- 
+2.54.0
+
+
+From 7715789177d863f24f29fd1c250dec2abdd23cf2 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Wed, 6 Jan 2021 13:35:58 +0100
+Subject: [PATCH 2/2] Fix compositing of kBGRA_8888_SkColorType on big endian
+
+---
+ src/core/compositor/display_software_output_surface.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/core/compositor/display_software_output_surface.cpp b/src/core/compositor/display_software_output_surface.cpp
+index 833469b85f..dbcd6100e4 100644
+--- a/src/core/compositor/display_software_output_surface.cpp
++++ b/src/core/compositor/display_software_output_surface.cpp
+@@ -81,7 +81,12 @@ inline QImage::Format imageFormat(SkColorType colorType)
+ {
+     switch (colorType) {
+     case kBGRA_8888_SkColorType:
++#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
+         return QImage::Format_ARGB32_Premultiplied;
++#else
++        // R/B swap needed...
++        return QImage::Format_RGBA8888_Premultiplied;
++#endif
+     case kRGBA_8888_SkColorType:
+         return QImage::Format_RGBA8888_Premultiplied;
+     default:
+@@ -101,6 +106,10 @@ void DisplaySoftwareOutputSurface::Device::swapFrame()
+     QImage image(reinterpret_cast<const uchar *>(skPixmap.addr()), viewport_pixel_size_.width(),
+                  viewport_pixel_size_.height(), skPixmap.rowBytes(),
+                  imageFormat(skPixmap.colorType()));
++#if Q_BYTE_ORDER == Q_BIG_ENDIAN
++	if (skPixmap.colorType() == kBGRA_8888_SkColorType)
++	  image = image.rgbSwapped();
++#endif
+     if (m_image.size() == image.size()) {
+         QRect damageRect = toQt(damage_rect_);
+         QPainter painter(&m_image);
+-- 
+2.54.0
+
