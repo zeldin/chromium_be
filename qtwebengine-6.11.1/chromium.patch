@@ -1,7 +1,7 @@
 From 1d90d319c64ab7915be29333a836fba48178169b Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 Nov 2023 12:13:19 +0100
-Subject: [PATCH 01/46] chromium base ppc64 patch
+Subject: [PATCH 01/47] chromium base ppc64 patch
 
 ---
  .../chromium/base/allocator/dispatcher/tls.h        |  2 ++
@@ -117,7 +117,7 @@ index 84678cb2f3..a53c1acf06 100644
 From aa0698cb98d7cda66818a7d94cbb62367d3334a6 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:04:47 +0200
-Subject: [PATCH 02/46] datapack: Byteswap metadata on big endian
+Subject: [PATCH 02/47] datapack: Byteswap metadata on big endian
 
 ---
  .../chromium/ui/base/resource/data_pack.cc    | 37 ++++++++++++-------
@@ -304,7 +304,7 @@ index 38e7cb15fd..76fb7cef1b 100644
 From 07fb4caed7b1651d57854bb9e810520a028affa2 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:15:57 +0200
-Subject: [PATCH 03/46] i18n: Use correct ICU data file
+Subject: [PATCH 03/47] i18n: Use correct ICU data file
 
 ---
  src/3rdparty/chromium/base/i18n/icu_util.cc | 4 ++++
@@ -333,7 +333,7 @@ index 79a5e1ccdf..0d0bd554c3 100644
 From c90f9442455b6015979f529a7cd9e1ec41c3918e Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:18:47 +0200
-Subject: [PATCH 04/46] blink: Update variable names in BE part of graphics
+Subject: [PATCH 04/47] blink: Update variable names in BE part of graphics
  code
 
 ---
@@ -362,7 +362,7 @@ index cd4a96cf77..9a694ca69d 100644
 From ef7466d66b8b29ca0e634f9af42c0681b463d9f2 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:58:23 +0200
-Subject: [PATCH 05/46] modp_b64: Set WORDS_BIGENDIAN on big endian
+Subject: [PATCH 05/47] modp_b64: Set WORDS_BIGENDIAN on big endian
 
 ---
  src/3rdparty/chromium/third_party/modp_b64/BUILD.gn | 6 ++++++
@@ -396,7 +396,7 @@ index 13ddaa1845..8be86b704b 100644
 From c397727cf3132e4a9facddece8131a8a62c77c39 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Tue, 2 Oct 2018 23:59:08 +0200
-Subject: [PATCH 06/46] modp_b64: Fix modp_b64_decode on big endian
+Subject: [PATCH 06/47] modp_b64: Fix modp_b64_decode on big endian
 
 ---
  .../chromium/third_party/modp_b64/modp_b64.cc | 25 +++++++++++++++++++
@@ -471,7 +471,7 @@ index 9be58205f4..b61a956cba 100644
 From 8f399a9d4b6b6e0128f09b5b5ffaa7dad4c0ce87 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Mon, 12 Nov 2018 19:51:58 +0100
-Subject: [PATCH 07/46] unittest: Fix some tests exposing endianness to work on
+Subject: [PATCH 07/47] unittest: Fix some tests exposing endianness to work on
  BE
 
 ---
@@ -588,7 +588,7 @@ index ef54cc652b..6e4353cf05 100644
 From 827406b2cd04b063556a523f53013b2530671dc1 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 17 Feb 2019 16:43:20 +0100
-Subject: [PATCH 08/46] V4Rice: Fix LE dependency
+Subject: [PATCH 08/47] V4Rice: Fix LE dependency
 
 ---
  .../safe_browsing/core/browser/db/v4_rice.cc           |  9 +++------
@@ -678,7 +678,7 @@ index 3da95446cf..f4988ad212 100644
 From 89a43dd5180e9f8d2021618752570359fdf7eca1 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 17 Feb 2019 17:01:13 +0100
-Subject: [PATCH 09/46] url::Canonicalize: Remove unportable reinterpret_cast
+Subject: [PATCH 09/47] url::Canonicalize: Remove unportable reinterpret_cast
 
 ---
  src/3rdparty/chromium/url/url_canon_host.cc    | 3 +--
@@ -724,7 +724,7 @@ index 97a5ae4696..11dda9075b 100644
 From 894aaf2860190f4c0da5239950d4e12d560e457f Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 23 Feb 2019 14:35:04 +0100
-Subject: [PATCH 10/46] CRLSet: Fix LE dependency
+Subject: [PATCH 10/47] CRLSet: Fix LE dependency
 
 ---
  src/3rdparty/chromium/net/cert/crl_set.cc | 18 +++++++-----------
@@ -793,7 +793,7 @@ index 3ec0459e5e..19f7cd74fd 100644
 From 340a343373d0f03cdae5f7bdb1d55bbfd4da0b40 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 23 Feb 2019 22:33:02 +0100
-Subject: [PATCH 11/46] crc32c: Fix definition of BYTE_ORDER_BIG_ENDIAN
+Subject: [PATCH 11/47] crc32c: Fix definition of BYTE_ORDER_BIG_ENDIAN
 
 ---
  src/3rdparty/chromium/third_party/crc32c/BUILD.gn | 5 +----
@@ -825,7 +825,7 @@ index b3d7f60df0..5934240451 100644
 From 547a5117340d6e499a882f93c640849023da3ad4 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 6 Mar 2019 20:26:32 +0100
-Subject: [PATCH 12/46] blink: handle pixel format selection independent of
+Subject: [PATCH 12/47] blink: handle pixel format selection independent of
  byteorder
 
 ---
@@ -914,7 +914,7 @@ index eb51461774..755a3a51ed 100644
 From e31de84fe76ea363614f6da270a727fc57b8a1ca Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 27 Mar 2019 21:32:08 +0100
-Subject: [PATCH 13/46] blink: Fix BMP header and pixel parsing on big endian
+Subject: [PATCH 13/47] blink: Fix BMP header and pixel parsing on big endian
 
 ---
  .../renderer/platform/image-decoders/bmp/bmp_image_reader.h   | 4 ++++
@@ -949,7 +949,7 @@ index cb0932b5f1..1e0eed40a9 100644
 From 7660a4de2a438245cd46374c64ae5cb8f757ada9 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 27 Mar 2019 21:33:04 +0100
-Subject: [PATCH 14/46] blink: Fix alpha check in GC tests
+Subject: [PATCH 14/47] blink: Fix alpha check in GC tests
 
 ---
  .../blink/renderer/platform/graphics/graphics_context_test.cc | 4 ++--
@@ -984,7 +984,7 @@ index 630910d7ec..7a05768f3e 100644
 From 66951d2994cb5c20a22602083843502c99e7dcfc Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 27 Mar 2019 21:34:12 +0100
-Subject: [PATCH 15/46] blink: Fix typo in WebGL image conversion test
+Subject: [PATCH 15/47] blink: Fix typo in WebGL image conversion test
 
 ---
  .../platform/graphics/gpu/webgl_image_conversion_test.cc    | 6 +++---
@@ -1014,7 +1014,7 @@ index 4149b87d6c..12dbf34ea2 100644
 From 2ff1b8685213a283d1a10c25b591fc4f4ac50b06 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 6 Apr 2019 15:43:20 +0200
-Subject: [PATCH 16/46] blink: Fix bizarre endianness dependency in TensorFlow
+Subject: [PATCH 16/47] blink: Fix bizarre endianness dependency in TensorFlow
  output
 
 ---
@@ -1112,7 +1112,7 @@ index 9ce6ded3ee..30088bb5ba 100644
 From e9bb7dd7c7c1ae10a38e421079d0984d4e0e0f64 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 6 Apr 2019 23:35:33 +0200
-Subject: [PATCH 17/46] gfx: Use correct function to create a SkPMColor rather
+Subject: [PATCH 17/47] gfx: Use correct function to create a SkPMColor rather
  than a SkColor
 
 ---
@@ -1139,7 +1139,7 @@ index f168b1732b..816adfa1ca 100644
 From 9085f825c5d6e50328c12da56434df186792c3c3 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 11:54:18 +0200
-Subject: [PATCH 18/46] skia: Fix testcases to use SkPMColor rather than
+Subject: [PATCH 18/47] skia: Fix testcases to use SkPMColor rather than
  SkColor for internal access
 
 ---
@@ -1214,7 +1214,7 @@ index 576297c0ec..8a64b3c56c 100644
 From 89789dd8b539c60a802f4b86c497a4d92bd371ed Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 16:51:54 +0200
-Subject: [PATCH 19/46] gfx: select JPEG color space in an endian-neutral
+Subject: [PATCH 19/47] gfx: select JPEG color space in an endian-neutral
  manner
 
 ---
@@ -1243,7 +1243,7 @@ index 6b233181ea..8f61944249 100644
 From dac232058a321d6aaed1f1906dbf41806a5d6b70 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Apr 2019 21:22:12 +0200
-Subject: [PATCH 20/46] gfx: Fix color analysis on big endian
+Subject: [PATCH 20/47] gfx: Fix color analysis on big endian
 
 This also adds an ARGB decode mode to the PNG codec since
 CalculateKMeanColorOfBuffer needs the pixels to be in SkColor (which
@@ -1380,7 +1380,7 @@ index c7651afd8e..1bf10bdcc0 100644
 From e7c16b24ede1a746a87350092a72e67fa9f8f14c Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 11:47:03 +0200
-Subject: [PATCH 21/46] media/renderers: Fix component order test to check
+Subject: [PATCH 21/47] media/renderers: Fix component order test to check
  bytes instead of shifts
 
 ---
@@ -1418,7 +1418,7 @@ index 4b11e2511b..e4f4355de0 100644
 From 74d415d3861ade9610e5be5729b51671bd67e8a0 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 12:07:30 +0200
-Subject: [PATCH 22/46] media/ffmpeg: Remove #error on endianness
+Subject: [PATCH 22/47] media/ffmpeg: Remove #error on endianness
 
 ---
  src/3rdparty/chromium/media/ffmpeg/ffmpeg_common.cc | 4 ----
@@ -1446,7 +1446,7 @@ index 8aecfc75f1..cac639fa6b 100644
 From 1bd3883a91d89bf456e78adbe737786ae0afb002 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 12:07:49 +0200
-Subject: [PATCH 23/46] media/formats/mp4: Fix endian dependent code in
+Subject: [PATCH 23/47] media/formats/mp4: Fix endian dependent code in
  OpusSpecificBox::Parse
 
 ---
@@ -1488,7 +1488,7 @@ index 62c49ad1a5..9dfc40d4ed 100644
 From 88167d63d0943a09ae876cb30ce23ed42f37be58 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 18 May 2019 12:25:41 +0200
-Subject: [PATCH 24/46] skia: Select RGBA component order on big endian
+Subject: [PATCH 24/47] skia: Select RGBA component order on big endian
 
 ---
  .../chromium/skia/config/SkUserConfig.h        | 18 +++++++-----------
@@ -1542,7 +1542,7 @@ index aea9957f0c..74d351f684 100644
 From 4c52c6a7373274df4724bf522540f3254146e77e Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Fri, 5 Mar 2021 23:08:25 +0100
-Subject: [PATCH 25/46] base/allocator: Disable alternate pointer
+Subject: [PATCH 25/47] base/allocator: Disable alternate pointer
  transformation on BE
 
 ---
@@ -1644,7 +1644,7 @@ index 90688eaca4..adcfe89067 100644
 From 2cd485ba43a61c51a37b9cc3d00b519da89173dc Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Mar 2021 01:07:10 +0100
-Subject: [PATCH 26/46] ui/gtk: After rendering, convert CAIRO_FORMAT_ARGB32 to
+Subject: [PATCH 26/47] ui/gtk: After rendering, convert CAIRO_FORMAT_ARGB32 to
  SkPMColor if needed
 
 ---
@@ -1775,7 +1775,7 @@ index 4f8a29ce07..fa7ac1b02d 100644
 From d7eea16eee9a0176f42b4d01313009ba3cb75494 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 7 Mar 2021 19:06:21 +0100
-Subject: [PATCH 27/46] ui/base/x: Fix ColorTypeForVisual on big endian
+Subject: [PATCH 27/47] ui/base/x: Fix ColorTypeForVisual on big endian
 
 ---
  src/3rdparty/chromium/ui/base/x/x11_util.cc | 13 +++++++++++++
@@ -1818,7 +1818,7 @@ index 04a51c1eb3..74dcdae013 100644
 From b4d931219a614857f888f871907de48c992a6a64 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Fri, 12 Mar 2021 22:15:50 +0100
-Subject: [PATCH 28/46] blink: Remove bogus error in avif_image_decoder
+Subject: [PATCH 28/47] blink: Remove bogus error in avif_image_decoder
 
 ---
  .../platform/image-decoders/avif/avif_image_decoder.cc        | 4 ----
@@ -1846,7 +1846,7 @@ index 3ff7be0fc2..1dfbf4e1fd 100644
 From 35b13c8158f1f2caea33e5f91ea775338572a68b Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 13 Mar 2021 12:52:36 +0100
-Subject: [PATCH 29/46] pdf: Byteswap UTF-16LE strings from PDFium into native
+Subject: [PATCH 29/47] pdf: Byteswap UTF-16LE strings from PDFium into native
 
 ---
  .../pdf/pdfium/pdfium_api_string_buffer_adapter.cc  | 13 +++++++++++++
@@ -1895,7 +1895,7 @@ index 3951440490..040ecc73d0 100644
 From 6439c723b7788df08e1d9c9e552988bfba5ff3c0 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 11 Apr 2021 18:04:41 +0200
-Subject: [PATCH 30/46] disc_cache: Fix inconsistency in access of
+Subject: [PATCH 30/47] disc_cache: Fix inconsistency in access of
  allocation_map
 
 ---
@@ -1933,7 +1933,7 @@ index 9f608137ae..33a2fe928e 100644
 From ac9181dbc38d86984d6e8c7477eec8ff965cc871 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Thu, 6 Jul 2023 11:25:13 +0200
-Subject: [PATCH 31/46] mojo: Make convenience pipe names little endian ints as
+Subject: [PATCH 31/47] mojo: Make convenience pipe names little endian ints as
  documented
 
 ---
@@ -2017,7 +2017,7 @@ index ea0998b1f9..56c9f936b7 100644
 From 62733aa77aa7372c63afc45ceb51616cac575c73 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Thu, 6 Jul 2023 14:26:42 +0200
-Subject: [PATCH 32/46] cc: Fix size I/O
+Subject: [PATCH 32/47] cc: Fix size I/O
 
 ---
  src/3rdparty/chromium/cc/paint/paint_op_reader.cc | 6 ++++++
@@ -2085,7 +2085,7 @@ index f1c7af0f37..82c29f19c0 100644
 From f9d369c5a6a8cfc352ef0c7390f166abb73f0510 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 9 Jul 2023 17:45:20 +0200
-Subject: [PATCH 33/46] pdf: Ask for the correct component order from PDFium
+Subject: [PATCH 33/47] pdf: Ask for the correct component order from PDFium
 
 ---
  src/3rdparty/chromium/pdf/pdfium/pdfium_engine.cc | 4 ++++
@@ -2113,7 +2113,7 @@ index 2f2e0247a9..dbbe1d6baa 100644
 From 18840b34eeaccce1e1f63e3bff01949d24a0934c Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Wed, 16 Jul 2025 16:22:24 +0200
-Subject: [PATCH 34/46] numerics: Fix byte conversion functions
+Subject: [PATCH 34/47] numerics: Fix byte conversion functions
 
 ---
  .../chromium/base/numerics/byte_conversions.h | 87 +++++++++++++++----
@@ -2380,7 +2380,7 @@ index bb4c718203..36c13183fe 100644
 From b570aa7dca7451b8fea2df2561ca0bafd2fe6f7d Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Thu, 17 Jul 2025 17:54:23 +0200
-Subject: [PATCH 35/46] audio: Disable endian check in
+Subject: [PATCH 35/47] audio: Disable endian check in
  AudioDebugFileWriter::DoWrite
 
 We don't care about audio debug files anyway...
@@ -2408,7 +2408,7 @@ index ffdf5f894e..7f168c4661 100644
 From 4b214f7e63b23111432a5ae27fad1b21dc2f335b Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Thu, 17 Jul 2025 22:48:20 +0200
-Subject: [PATCH 36/46] blink: Update RGB format selection in
+Subject: [PATCH 36/47] blink: Update RGB format selection in
  avif_image_decoder for BE
 
 ---
@@ -2451,7 +2451,7 @@ index 1dfbf4e1fd..0a0dd5a079 100644
 From 2277b606668a61cd63f2e095103610edbd59c8e1 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 20 Jul 2025 12:35:19 +0200
-Subject: [PATCH 37/46] base/process: Increase min stack size for ppc64
+Subject: [PATCH 37/47] base/process: Increase min stack size for ppc64
 
 ---
  src/3rdparty/chromium/base/process/launch.h | 2 +-
@@ -2477,7 +2477,7 @@ index a601e7c93f..44b98f1952 100644
 From 2de8048c693098b2d5b8e7185db63ddd6edce5cc Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Mon, 21 Jul 2025 12:07:24 +0200
-Subject: [PATCH 38/46] compositor: QtWebEngine requires NativePixmap for GPU
+Subject: [PATCH 38/47] compositor: QtWebEngine requires NativePixmap for GPU
  compositing
 
 ---
@@ -2519,7 +2519,7 @@ index c724a6691d..2f9d9a3bc9 100644
 From 5357f54cce87288ddc1b8e4ffae920e0616a1c6d Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Fri, 13 Feb 2026 22:33:37 +0100
-Subject: [PATCH 39/46] blink: Fix converting hash readers
+Subject: [PATCH 39/47] blink: Fix converting hash readers
 
 Google modified rapidhash to use native byteorder instead of
 always using little endian.  Make the appropriate changes to
@@ -2653,7 +2653,7 @@ index 119ed17eff..206c57cfa4 100644
 From 37dcadd6fa5fecb702d2ec0dac3d15c19529f882 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Mon, 16 Mar 2026 22:22:05 +0100
-Subject: [PATCH 40/46] numerics: Fix To/FromLittleEndian
+Subject: [PATCH 40/47] numerics: Fix To/FromLittleEndian
 
 ---
  src/3rdparty/chromium/base/numerics/basic_ops_impl.h | 6 ++++++
@@ -2690,7 +2690,7 @@ index 19d06432f1..34115e56aa 100644
 From 3cc8b66755276ae80b8896a56ff63664c2dddc22 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 22 Mar 2026 14:59:12 +0100
-Subject: [PATCH 41/46] build: Use big endian triplet for rust
+Subject: [PATCH 41/47] build: Use big endian triplet for rust
 
 ---
  src/3rdparty/chromium/build/config/rust.gni               | 2 +-
@@ -2728,7 +2728,7 @@ index fc4780bf65..ef8d180cb7 100644
 From 7cf086e18bd7d079ebbe8973fec02aa871002f72 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 22 Mar 2026 14:59:49 +0100
-Subject: [PATCH 42/46] build: Disable use of lld
+Subject: [PATCH 42/47] build: Disable use of lld
 
 ---
  .../chromium/build/config/compiler/compiler.gni      |  2 +-
@@ -2792,7 +2792,7 @@ index dbad3c53ee..664eb8f716 100755
 From 0a44aa9779233c31382c76d373e3528d76a951a6 Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sat, 25 Apr 2026 15:47:55 +0200
-Subject: [PATCH 43/46] pickle: Fix transfer of bools
+Subject: [PATCH 43/47] pickle: Fix transfer of bools
 
 Since ReadBool() only looks at the first 8 bits of the int that is
 encoded by WriteBool(), make sure that all the bits convey the bool
@@ -2821,7 +2821,7 @@ index f867de5de6..243d27b11e 100644
 From ff5d561bb02b107596642f0ea9906f051cbece7f Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Sun, 14 Jun 2026 19:16:37 +0200
-Subject: [PATCH 44/46] base/allocator: Fix nonworking constexpr on BE ppc64
+Subject: [PATCH 44/47] base/allocator: Fix nonworking constexpr on BE ppc64
 
 On LE, PAGE_ALLOCATOR_CONSTANTS_DECLARE_CONSTEXPR in used instead of
 constexpr.  Do the same on BE.
@@ -2853,7 +2853,7 @@ index 597bce14f2..d7d7b548d1 100644
 From f25969e048477008127a0ddcbd23f0c5d630cebc Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Mon, 29 Jun 2026 13:57:10 +0200
-Subject: [PATCH 45/46] cc: Add missing WriteEnum to PaintOpWriter
+Subject: [PATCH 45/47] cc: Add missing WriteEnum to PaintOpWriter
 
 ---
  src/3rdparty/chromium/cc/paint/paint_op_writer.h | 1 +
@@ -2878,7 +2878,7 @@ index 9c8fc4153d..d819235de4 100644
 From 590c0212d80709bacea5a7b14b543dd46b72599c Mon Sep 17 00:00:00 2001
 From: Marcus Comstedt <marcus@mc.pp.se>
 Date: Thu, 16 Jul 2026 09:29:54 +0200
-Subject: [PATCH 46/46] blink: Fix prototype of non-vector
+Subject: [PATCH 46/47] blink: Fix prototype of non-vector
  Delay::ProcessARateVector
 
 ---
@@ -2900,6 +2900,145 @@ index b031acfd8e..5191143610 100644
    // We don't have a vectorized version, so just do nothing and return the 0 to
    // indicate no frames processed and return the current write_index_.
    return std::make_tuple(0, write_index_);
+-- 
+2.54.0
+
+
+From 35ccff774fae79ee341bd19fe0eb2f413ce69856 Mon Sep 17 00:00:00 2001
+From: Marcus Comstedt <marcus@mc.pp.se>
+Date: Fri, 24 Jul 2026 17:32:48 +0200
+Subject: [PATCH 47/47] blink: Fix parsing of binary hyphenation files
+
+---
+ .../text/hyphenation/hyphenator_aosp.cc       | 73 ++++++++++++-------
+ 1 file changed, 46 insertions(+), 27 deletions(-)
+
+diff --git a/src/3rdparty/chromium/third_party/blink/renderer/platform/text/hyphenation/hyphenator_aosp.cc b/src/3rdparty/chromium/third_party/blink/renderer/platform/text/hyphenation/hyphenator_aosp.cc
+index 79cc9261bf..0317169f04 100644
+--- a/src/3rdparty/chromium/third_party/blink/renderer/platform/text/hyphenation/hyphenator_aosp.cc
++++ b/src/3rdparty/chromium/third_party/blink/renderer/platform/text/hyphenation/hyphenator_aosp.cc
+@@ -24,8 +24,27 @@
+ #include <fcntl.h>
+ 
+ #include "base/compiler_specific.h"
++#include "base/numerics/byte_conversions.h"
+ #include "third_party/blink/renderer/platform/text/hyphenation/hyphenator_aosp.h"
+ 
++namespace {
++
++class leuint32_t {
++public:
++  constexpr operator uint32_t() const {
++#if defined(ARCH_CPU_LITTLE_ENDIAN)
++    return n;
++#else
++    return base::ByteSwap(n);
++#endif
++  }
++      
++private:
++  uint32_t n;
++};
++
++}
++
+ namespace android {
+ 
+ using blink::wtf_size_t;
+@@ -36,37 +55,37 @@ static const uint16_t CHAR_SOFT_HYPHEN = 0x00AD;
+ // format
+ 
+ struct AlphabetTable0 {
+-  uint32_t version;
+-  uint32_t min_codepoint;
+-  uint32_t max_codepoint;
++  leuint32_t version;
++  leuint32_t min_codepoint;
++  leuint32_t max_codepoint;
+   uint8_t data[1];  // actually flexible array, size is known at runtime
+ };
+ 
+ struct AlphabetTable1 {
+-  uint32_t version;
+-  uint32_t n_entries;
+-  uint32_t data[1];  // actually flexible array, size is known at runtime
++  leuint32_t version;
++  leuint32_t n_entries;
++  leuint32_t data[1];  // actually flexible array, size is known at runtime
+ 
+   static uint32_t codepoint(uint32_t entry) { return entry >> 11; }
+   static uint32_t value(uint32_t entry) { return entry & 0x7ff; }
+ };
+ 
+ struct Trie {
+-  uint32_t version;
+-  uint32_t char_mask;
+-  uint32_t link_shift;
+-  uint32_t link_mask;
+-  uint32_t pattern_shift;
+-  uint32_t n_entries;
+-  uint32_t data[1];  // actually flexible array, size is known at runtime
++  leuint32_t version;
++  leuint32_t char_mask;
++  leuint32_t link_shift;
++  leuint32_t link_mask;
++  leuint32_t pattern_shift;
++  leuint32_t n_entries;
++  leuint32_t data[1];  // actually flexible array, size is known at runtime
+ };
+ 
+ struct Pattern {
+-  uint32_t version;
+-  uint32_t n_entries;
+-  uint32_t pattern_offset;
+-  uint32_t pattern_size;
+-  uint32_t data[1];  // actually flexible array, size is known at runtime
++  leuint32_t version;
++  leuint32_t n_entries;
++  leuint32_t pattern_offset;
++  leuint32_t pattern_size;
++  leuint32_t data[1];  // actually flexible array, size is known at runtime
+ 
+   // accessors
+   static uint32_t len(uint32_t entry) { return entry >> 26; }
+@@ -78,19 +97,19 @@ struct Pattern {
+ };
+ 
+ struct Header {
+-  uint32_t magic;
+-  uint32_t version;
+-  uint32_t alphabet_offset;
+-  uint32_t trie_offset;
+-  uint32_t pattern_offset;
+-  uint32_t file_size;
++  leuint32_t magic;
++  leuint32_t version;
++  leuint32_t alphabet_offset;
++  leuint32_t trie_offset;
++  leuint32_t pattern_offset;
++  leuint32_t file_size;
+ 
+   // accessors
+   const uint8_t* bytes() const {
+     return reinterpret_cast<const uint8_t*>(this);
+   }
+   uint32_t alphabetVersion() const {
+-    return *reinterpret_cast<const uint32_t*>(
++    return *reinterpret_cast<const leuint32_t*>(
+         UNSAFE_TODO(bytes() + alphabet_offset));
+   }
+   const AlphabetTable0* alphabetTable0() const {
+@@ -173,8 +192,8 @@ bool Hyphenator::alphabetLookup(uint16_t* alpha_codes,
+   } else if (alphabetVersion == 1) {
+     const AlphabetTable1* alphabet = header->alphabetTable1();
+     size_t n_entries = alphabet->n_entries;
+-    const uint32_t* begin = alphabet->data;
+-    const uint32_t* end = UNSAFE_TODO(begin + n_entries);
++    const leuint32_t* begin = alphabet->data;
++    const leuint32_t* end = UNSAFE_TODO(begin + n_entries);
+     alpha_codes[0] = 0;
+     for (wtf_size_t i = 0; i < len; i++) {
+       uint16_t c = UNSAFE_TODO(word[i]);
 -- 
 2.54.0
 
